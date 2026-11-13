@@ -185,12 +185,17 @@
   function teamGames(id) { return DATA.games.filter((g) => (g.t1 && g.t1.id === id) || (g.t2 && g.t2.id === id)); }
 
   /* ---------- pages ---------- */
+  function filterMatch(t) { return !!t && t.lions && (ui.age === 'All' || t.age === ui.age) && (ui.sex === 'All' || t.sex === ui.sex); }
+  function gameMatches(g) { return filterMatch(g.t1) || filterMatch(g.t2); }
+
   function pageHome() {
     const now = Date.now();
-    const live = DATA.games.filter((g) => g.status === 'live');
+    const ages = Array.from(new Set(Array.from(DATA.teams.values()).map((t) => t.age))).sort((a, b) => ageNum(a) - ageNum(b));
+    const games = DATA.games.filter(gameMatches);
+    const live = games.filter((g) => g.status === 'live');
     const horizon = now + 8 * 864e5;
-    const upcoming = DATA.games.filter((g) => g.status === 'upcoming' && !g.bye && g.start.getTime() > now - 3 * 3600e3 && g.start.getTime() < horizon);
-    const recent = DATA.games.filter((g) => g.status === 'final' && !g.bye && g.start.getTime() > now - 2 * 864e5).reverse();
+    const upcoming = games.filter((g) => g.status === 'upcoming' && !g.bye && g.start.getTime() > now - 3 * 3600e3 && g.start.getTime() < horizon);
+    const recent = games.filter((g) => g.status === 'final' && !g.bye && g.start.getTime() > now - 2 * 864e5).reverse();
     let html = '';
 
     const mine = myTeamIds().filter((id) => DATA.teams.has(id)).map((id) => DATA.teams.get(id)).sort(teamSort);
@@ -206,7 +211,7 @@
     }
 
     html += '<div class="page-head"><div><div class="eyebrow">' + esc(fLongDay.format(new Date())) + '</div><h1 class="page-title">Game day</h1>' +
-      '<div class="page-sub">' + (live.length ? live.length + ' live · ' : '') + upcoming.length + ' Lions games in the next week</div></div></div>';
+      '<div class="page-sub">' + (live.length ? live.length + ' live · ' : '') + upcoming.length + (upcoming.length === 1 ? ' Lions game' : ' Lions games') + ' in the next week</div></div></div>' + filterChips(ages);
 
     if (live.length) html += '<section><h2 class="section-title">Live now</h2><div class="live-grid">' + live.map(liveCard).join('') + '</div></section>';
 
@@ -216,7 +221,7 @@
     }
 
     if (!upcoming.length) {
-      html += '<div class="notice"><h2>No Lions games in the next week</h2><a href="#/results">See the latest results</a></div>';
+      html += '<div class="notice"><h2>No ' + (ui.age === 'All' && ui.sex === 'All' ? 'Lions' : 'matching') + ' games in the next week</h2><a href="#/results">See the latest results</a></div>';
     } else {
       const byDay = new Map();
       upcoming.forEach((g) => { const k = dayKey(g.start); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(g); });
