@@ -31,6 +31,23 @@ window.LIONS_CONFIG = {
     }
   ],
   clubMatch: 'Central Districts Lions',
+  // Sponsors. Logos live in the sponsors/ folder. Remove an entry (or set it to null) to hide that spot.
+  sponsors: {
+    list: {
+      mazda: { name: 'Barossa Mazda', logo: 'sponsors/barossa-mazda.png', url: 'https://www.barossamazda.com.au/', dark: true },
+      injuryhub: {
+        name: 'The Injury Hub', logo: 'sponsors/injury-hub.png', url: 'https://theinjuryhub.com.au/',
+        blurb: 'Physio, rehab and classes in Willaston. Sprains, strains and niggles sorted.', cta: 'Book online'
+      }
+    },
+    presenting: 'mazda',            // "Game day presented by" strip under the header (Game day page)
+    wall: ['mazda', 'injuryhub'],   // "Thanks to our sponsors" wall above the footer (every page)
+    wallSlots: 4,                   // empty "Your logo here" spots on the wall, to sell
+    feed: 'injuryhub',              // sponsor card between the days on the Game day page
+    teams: {                        // team sponsors, by team name as shown on the team page
+      'U14 Boys Lions 1': 'injuryhub'
+    }
+  },
   timeZone: 'Australia/Adelaide',
   // How often to refresh while any Lions game is live (milliseconds).
   liveRefreshMs: 60000
