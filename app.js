@@ -462,7 +462,7 @@
       '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs">' + esc(g.status === 'upcoming' ? '–' : v.su ?? 0) + '</span>' +
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
-      (g.status !== 'upcoming' && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
+      (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
         (CFG.foulsBase ? '<section class="card fouls-card" data-fouls="' + g.id + '" hidden></section>' : '') +
         '<div class="swipe"><div class="swipe-track">' +
@@ -593,7 +593,7 @@
         if (!gameEl.isConnected) return;
         if (!rows.length) {
           gameEl.innerHTML = '<div class="notice stats-wait">' + (g.status === 'live'
-            ? '<h3>Player stats arrive at full time</h3><p>BasketballConnect only publishes points, fouls and shooting for each player once the game ends. The score above is live, and this page fills in the box score by itself when the final siren goes. For fouls as they happen, open the live action log above.</p>'
+            ? '<h3>Player stats arrive at full time</h3><p>BasketballConnect only publishes points, fouls and shooting for each player once the game ends. The score above is live, and this page fills in the box score by itself when the final siren goes.</p>'
             : '<h3>No player stats for this game</h3><p>Stats sometimes get entered a while after the final siren, or not at all. Check back later.</p>') + '</div>';
         } else {
         const sides = [v.us, v.them].filter(Boolean);
