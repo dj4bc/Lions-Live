@@ -334,3 +334,8 @@ table.box td.empty { white-space: normal; }
 .stats-wait h3 { margin: 0 0 6px; font-family: var(--display); font-size: 22px; color: var(--navy); }
 .stats-wait p { margin: 0; color: var(--muted); }
 .box-grid .stats-wait { grid-column: 1 / -1; }
+
+/* Link to BasketballConnect's match centre */
+.alog-btn { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; margin-top: 4px; padding: 10px 14px; min-height: 44px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 600; font-size: 14px; text-decoration: none; }
+.alog-btn:hover { background: rgba(255,255,255,0.2); }
+.alog-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff5a4f; box-shadow: 0 0 0 3px rgba(255,90,79,0.3); }
