@@ -56,7 +56,7 @@
       gender: m ? (/[BM]/.test(m[2]) ? 'Boys' : 'Girls') : '', // filter key: male or female
       club: rest,
       short: lions ? 'Lions' + (num ? ' ' + num : '') : rest,
-      logo: lions ? 'shield.png' : (/^https:\/\//.test(t.logoUrl || '') ? t.logoUrl : ''),
+      logo: lions ? 'shield.png?v=2' : (/^https:\/\//.test(t.logoUrl || '') ? t.logoUrl : ''),
       lions
     };
   }
@@ -359,7 +359,7 @@
     const mine = isMyTeam(id);
 
     let html = '<p style="margin:0"><a href="#/teams">← All teams</a></p><div class="team-layout"><div style="display:flex;flex-direction:column;gap:20px">' +
-      '<section class="team-hero"><div class="team-hero-top"><img src="shield.png" alt=""><div class="team-hero-name"><div class="age">' + esc(groupName(t)) + '</div><h1>' + esc(t.short) + '</h1><div class="div">' + esc(div) + '</div></div>' +
+      '<section class="team-hero"><div class="team-hero-top"><img src="shield.png?v=2" alt=""><div class="team-hero-name"><div class="age">' + esc(groupName(t)) + '</div><h1>' + esc(t.short) + '</h1><div class="div">' + esc(div) + '</div></div>' +
       '<button class="star" type="button" data-star="' + id + '" aria-pressed="' + mine + '">' + starIcon + (mine ? 'My team' : 'Add to my teams') + '</button></div>' +
       '<div class="hero-stats"><div class="hero-stat"><span>Record</span><b>' + rec.W + '–' + rec.L + (rec.D ? '–' + rec.D : '') + '</b></div>' +
       '<div class="hero-stat"><span>For / against</span><b>' + rec.pf + '–' + rec.pa + '</b></div>' +
