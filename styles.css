@@ -267,3 +267,13 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 .worm { max-width: 640px; margin-left: auto; margin-right: auto; }
 [data-flow] { padding-bottom: 8px; }
 .qtable td:first-child { font-weight: 600; }
+
+/* Swipe between the quarter and game-flow cards */
+.swipe { min-width: 0; }
+.swipe-track { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; align-items: flex-start; overscroll-behavior-x: contain; }
+.swipe-track::-webkit-scrollbar { display: none; }
+.swipe-track > .card { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+.swipe-dots { display: flex; justify-content: center; gap: 4px; padding-top: 6px; }
+.swipe-dots button { width: 28px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; position: relative; }
+.swipe-dots button::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--line); transition: width .2s, margin .2s; }
+.swipe-dots button.on::after { width: 20px; margin-left: -10px; border-radius: 4px; background: var(--blue); }

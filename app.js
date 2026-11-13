@@ -460,8 +460,10 @@
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div></section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
+        '<div class="swipe"><div class="swipe-track">' +
         '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '<section class="card worm-card" data-flow="' + g.id + '"><div class="card-head"><h3>Game flow</h3><span class="meta">Margin at the end of each quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
+        '</div><div class="swipe-dots" role="tablist"><button type="button" class="on" aria-label="Quarter by quarter"></button><button type="button" aria-label="Game flow"></button></div></div>' +
         '<section class="box-grid" data-game-stats="' + g.id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading box score…</div></section>');
   }
 
@@ -474,7 +476,7 @@
     const g = DATA.games.find((x) => x.id === id);
     const v = view(g);
     const flowEl = app.querySelector('[data-flow="' + id + '"]');
-    const drop = () => { el.remove(); if (flowEl) flowEl.remove(); };
+    const drop = () => { const w = el.closest('.swipe'); if (w) w.remove(); else { el.remove(); if (flowEl) flowEl.remove(); } };
     if (!v.them) { drop(); return; }
     let per;
     try {
@@ -510,6 +512,18 @@
       ((ru !== (v.su || 0) || rt !== (v.sth || 0)) && g.status === 'final' ? '<p class="fine">Quarter scores come from player stats, which don\'t quite add up to the final score for this game.</p>' : '');
 
     if (flowEl) renderFlow(flowEl, g, v, q, label, usName, themName);
+    setupSwipe(el.closest('.swipe'));
+  }
+
+  // Swipe between the quarter-by-quarter and game-flow cards; the dots follow and can be tapped.
+  function setupSwipe(w) {
+    if (!w || w.dataset.ready) return;
+    w.dataset.ready = '1';
+    const track = w.querySelector('.swipe-track'), dots = [...w.querySelectorAll('.swipe-dots button')];
+    const step = () => (track.children[1] ? track.children[1].offsetLeft - track.children[0].offsetLeft : track.clientWidth);
+    const mark = () => { const i = Math.round(track.scrollLeft / step()); dots.forEach((d, j) => { d.classList.toggle('on', i === j); d.setAttribute('aria-selected', i === j); }); };
+    track.addEventListener('scroll', () => { cancelAnimationFrame(mark.f); mark.f = requestAnimationFrame(mark); }, { passive: true });
+    dots.forEach((d, j) => d.addEventListener('click', () => track.scrollTo({ left: j * step(), behavior: 'smooth' })));
   }
 
   // The worm plots our lead at the end of each quarter.
