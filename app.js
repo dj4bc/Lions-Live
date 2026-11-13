@@ -410,8 +410,8 @@
     const mock = new URLSearchParams(location.search).get('mock');
     if (mock) return 'stats-' + (q.matchId ? 'm' + q.matchId : 't' + q.teamId) + (q.period ? '-p' + q.period : '') + '.json';
     return CFG.apiBase + '/livescores/stats/public/v2/scoringByPlayer?competitionId=' + q.comp +
-      '&aggregate=ALL&search=&sportRefId=2&userId=&period=&offset=' + (q.teamId ? '0' : '') + '&limit=' + (q.teamId ? '100' : '') +
-      '&matchId=' + (q.matchId || '') + (q.teamId ? '&teamId=' + q.teamId : '') + (q.period ? '&period=' + q.period : '');
+      '&aggregate=ALL&search=&sportRefId=2&userId=&period=' + (q.period || '') + '&offset=' + (q.teamId ? '0' : '') + '&limit=' + (q.teamId ? '100' : '') +
+      '&matchId=' + (q.matchId || '') + (q.teamId ? '&teamId=' + q.teamId : '');
   }
   async function getStats(key, q, maxAgeMs) {
     const c = statsCache.get(key);
