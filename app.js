@@ -50,8 +50,17 @@
       sex: m ? (m[2] === 'B' ? 'Boys' : 'Girls') : '',
       club: rest,
       short: lions ? 'Lions' + (num ? ' ' + num : '') : rest,
+      logo: lions ? 'shield.png' : (/^https:\/\//.test(t.logoUrl || '') ? t.logoUrl : ''),
       lions
     };
+  }
+
+  // Club logo from BasketballConnect (our own shield for the Lions). Falls back to a blank tile.
+  function logo(t, size) {
+    size = size || 28;
+    const box = 'width:' + size + 'px;height:' + size + 'px';
+    if (!t || !t.logo) return '<span class="logo blank" style="' + box + '" aria-hidden="true"></span>';
+    return '<img class="logo" src="' + esc(t.logo) + '" alt="" width="' + size + '" height="' + size + '" style="' + box + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'logo blank\',style:\'' + box + '\'}))">';
   }
 
   function shortDivision(name) {
@@ -158,7 +167,7 @@
     const href = (!g.bye && g.status !== 'upcoming') ? '#/game/' + g.id : '#/team/' + v.us.id;
     const tag = opts.link === false ? 'div' : 'a';
     return '<' + tag + ' class="row"' + (tag === 'a' ? ' href="' + href + '"' : '') + '>' +
-      '<div class="row-main"><span class="row-title">' + esc(title) + ' <span class="vs">' + esc(opponentText(v)) + '</span></span>' +
+      (g.bye ? '' : logo(v.them, 30)) + '<div class="row-main"><span class="row-title">' + esc(title) + ' <span class="vs">' + esc(opponentText(v)) + '</span></span>' +
       '<span class="row-sub">' + esc(sub.join(' · ')) + '</span></div>' + right + '</' + tag + '>';
   }
 
@@ -166,8 +175,8 @@
     const v = view(g);
     return '<a class="live-card" href="#/game/' + g.id + '">' +
       '<div class="live-top"><span class="live-dot"></span><span class="label">LIVE</span><span class="div">' + esc(g.divisionShort) + '</span></div>' +
-      '<div class="live-lines"><span class="t1">' + esc(groupName(v.us) + ' ' + v.us.short) + '</span><span class="s1">' + esc(v.su ?? 0) + '</span>' +
-      '<span class="t2">' + esc(v.them ? v.them.short : '') + '</span><span class="s2">' + esc(v.sth ?? 0) + '</span></div>' +
+      '<div class="live-lines"><span class="t1">' + logo(v.us, 26) + esc(groupName(v.us) + ' ' + v.us.short) + '</span><span class="s1">' + esc(v.su ?? 0) + '</span>' +
+      '<span class="t2">' + logo(v.them, 26) + esc(v.them ? v.them.short : '') + '</span><span class="s2">' + esc(v.sth ?? 0) + '</span></div>' +
       '<span class="live-foot">' + esc(g.venueShort + ' · ' + g.court) + ' · tap for the box score</span></a>';
   }
 
@@ -219,7 +228,7 @@
           html += '<section><div class="slot-head"><h3>' + esc(t) + '</h3><span>' + games.length + (games.length === 1 ? ' game' : ' games') + '</span></div><div class="card">' +
             games.map((g) => {
               const v = view(g);
-              return '<a class="row" href="#/team/' + v.us.id + '"><div class="age-tile"><b>' + esc(v.us.age) + '</b><span>' + esc(v.us.sex.toUpperCase()) + '</span></div>' +
+              return '<a class="row" href="#/team/' + v.us.id + '">' + logo(v.them, 30) + '<div class="age-tile"><b>' + esc(v.us.age) + '</b><span>' + esc(v.us.sex.toUpperCase()) + '</span></div>' +
                 '<div class="row-main"><span class="row-title">' + esc(v.us.short) + ' <span class="vs">' + esc(opponentText(v)) + '</span></span>' +
                 '<span class="row-sub">' + esc(g.venueShort + ' · ' + g.court) + '</span></div></a>';
             }).join('') + '</div></section>';
@@ -339,7 +348,7 @@
         '<div class="next-top"><span class="tag' + (live || isToday ? '' : ' quiet') + '">' + (live ? 'LIVE ' + esc(v.su ?? 0) + '–' + esc(v.sth ?? 0) : isToday ? 'TODAY' : esc(dayLabel(next.start).toUpperCase())) + '</span>' +
         '<strong>' + esc(fDay.format(next.start) + ' · ' + time(next.start)) + '</strong></div>' +
         (next.bye ? '<div class="next-opp">Bye</div>' :
-          '<div><div class="page-sub">' + (v.home ? 'Home v' : 'Away to') + '</div><div class="next-opp">' + esc(v.them.short) + '</div></div>' +
+          '<div><div class="page-sub">' + (v.home ? 'Home v' : 'Away to') + '</div><div class="next-opp">' + logo(v.them, 34) + esc(v.them.short) + '</div></div>' +
           '<div class="next-venue">' + pin + '<span>' + esc(next.venue + ' · ' + next.court) + '</span></div>' +
           (live ? '<a class="btn" href="#/game/' + next.id + '">Live box score</a>' : '') +
           '<a class="btn' + (live ? ' secondary' : '') + '" href="' + mapsUrl(next) + '" target="_blank" rel="noopener">Directions</a>') +
@@ -403,11 +412,11 @@
     ? '<td class="num shirt">' + esc(p.shirt) + '</td><td class="pname hidden-name">#' + esc(p.shirt) + '</td>'
     : '<td class="num shirt">' + esc(p.shirt) + '</td><td class="pname">' + esc(p.name) + '</td>';
 
-  function boxTable(rows, title, isLions) {
+  function boxTable(rows, title, isLions, team) {
     rows = rows.slice().sort((a, b) => b.pts - a.pts || num(a.shirt) - num(b.shirt));
     const extra = rows.some((p) => p.tf || p.uf);
     const tot = rows.reduce((t, p) => { ['pts', 'ft', 'p2', 'p3', 'pf', 'tf', 'uf'].forEach((k) => { t[k] += p[k]; }); return t; }, { pts: 0, ft: 0, p2: 0, p3: 0, pf: 0, tf: 0, uf: 0 });
-    return '<article class="card' + (isLions ? ' mine' : '') + '"><div class="card-head"><h3>' + esc(title) + '</h3><span class="meta">' + tot.pts + ' pts</span></div>' +
+    return '<article class="card' + (isLions ? ' mine' : '') + '"><div class="card-head"><h3 class="with-logo">' + logo(team, 28) + esc(title) + '</h3><span class="meta">' + tot.pts + ' pts</span></div>' +
       '<div class="table-wrap"><table class="box"><thead><tr><th class="num">#</th><th>Player</th><th class="num">PTS</th><th class="num">FT</th><th class="num">2P</th><th class="num">3P</th><th class="num">PF</th>' + (extra ? '<th class="num">TF</th><th class="num">UF</th>' : '') + '</tr></thead><tbody>' +
       (rows.length ? rows.map((p) => '<tr' + (p.pf >= 5 ? ' class="fouled-out"' : '') + '>' + playerCell(p) + '<td class="num strong">' + p.pts + '</td><td class="num">' + p.ft + '</td><td class="num">' + p.p2 + '</td><td class="num">' + p.p3 + '</td><td class="num' + (p.pf >= 4 ? ' warn' : '') + '">' + p.pf + '</td>' + (extra ? '<td class="num">' + p.tf + '</td><td class="num">' + p.uf + '</td>' : '') + '</tr>').join('')
         : '<tr><td colspan="' + (extra ? 9 : 7) + '" class="empty">No player stats recorded for this team yet. Some games only get stats entered after the final siren, or not at all.</td></tr>') +
@@ -422,8 +431,8 @@
     const status = g.status === 'live' ? '<span class="tag">LIVE</span>' : g.status === 'final' ? '<span class="tag quiet">FINAL</span>' : '<span class="tag quiet">' + esc(dayLabel(g.start).toUpperCase() + ' ' + time(g.start)) + '</span>';
     return '<p style="margin:0"><a href="#/team/' + v.us.id + '">← ' + esc(groupName(v.us) + ' ' + v.us.short) + '</a></p>' +
       '<section class="game-hero"><div class="next-top">' + status + '<span class="game-meta">' + esc(g.round + ' · ' + fDay.format(g.start) + ' · ' + time(g.start)) + '</span></div>' +
-      '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs">' + esc(g.status === 'upcoming' ? '–' : v.su ?? 0) + '</span>' +
-      '<span class="gt opp">' + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
+      '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs">' + esc(g.status === 'upcoming' ? '–' : v.su ?? 0) + '</span>' +
+      '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div></section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
         '<section class="box-grid" data-game-stats="' + g.id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading box score…</div></section>');
@@ -439,7 +448,7 @@
         const rows = await getStats('m' + id, { matchId: id }, g.status === 'live' ? 25e3 : 6e5);
         if (!gameEl.isConnected) return;
         const sides = [v.us, v.them].filter(Boolean);
-        gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions)).join('') +
+        gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions, t)).join('') +
           '<p class="fine">FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
       } catch (e) {
         if (gameEl.isConnected) gameEl.innerHTML = '<div class="notice">Couldn\'t load the box score (' + esc(e.message) + '). It may not be recorded for this game.</div>';

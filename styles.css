@@ -201,3 +201,9 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 .btn.secondary { background: var(--tint); color: var(--navy); }
 .btn.secondary:hover { background: #E1E8F5; color: var(--navy); }
 @media (max-width: 480px) { table.box .opt { display: none; } table.box .pname { min-width: 90px; } }
+
+/* Club logos */
+.logo { flex: 0 0 auto; object-fit: contain; border-radius: 6px; background: #fff; vertical-align: middle; }
+.logo.blank { display: inline-block; background: var(--tint); }
+.live-lines .t1, .live-lines .t2, .game-lines .gt, .next-opp, h3.with-logo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.live-card .logo, .game-hero .logo { background: #fff; padding: 2px; box-sizing: border-box; }
