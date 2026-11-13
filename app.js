@@ -461,9 +461,9 @@
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div></section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
         '<div class="swipe"><div class="swipe-track">' +
-        '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '<section class="card worm-card" data-flow="' + g.id + '"><div class="card-head"><h3>Game flow</h3><span class="meta">Margin at the end of each quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
-        '</div><div class="swipe-dots" role="tablist"><button type="button" class="on" aria-label="Quarter by quarter"></button><button type="button" aria-label="Game flow"></button></div></div>' +
+        '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
+        '</div><div class="swipe-dots" role="tablist"><button type="button" class="on" aria-label="Game flow"></button><button type="button" aria-label="Quarter by quarter"></button></div></div>' +
         '<section class="box-grid" data-game-stats="' + g.id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading box score…</div></section>');
   }
 
