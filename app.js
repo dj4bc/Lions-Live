@@ -253,6 +253,7 @@
         html += '</div>';
       });
     }
+    html += installBanner();
     return html;
   }
 
@@ -493,6 +494,55 @@
       }
     }
   }
+
+  /* ---------- add to home screen ---------- */
+  // Android/desktop Chrome hand us an install prompt; iPhone needs the Share > Add to Home Screen steps.
+  const SITE_NAME = 'Lions Den';
+  const STORE_A2HS = 'lions.a2hsLater';
+  let installPrompt = null;
+  const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = () => /Android/i.test(navigator.userAgent);
+  function installBanner() {
+    if (isStandalone()) return '';
+    const later = parseInt(store.get(STORE_A2HS) || '0', 10);
+    if (later && Date.now() - later < 30 * 864e5) return '';
+    if (!installPrompt && !isIOS() && !isAndroid()) return '';
+    const phone = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"></rect><path d="M11 18h2"></path></svg>';
+    return '<section class="a2hs" aria-label="Add to home screen"><div class="a2hs-top"><img src="icon-192.png" alt="" width="56" height="56"><div><h2>' + esc(SITE_NAME) + ' on your phone</h2>' +
+      '<p>Scores, fixtures and venues one tap away, just like an app.</p></div></div>' +
+      '<button class="a2hs-go" type="button" data-install>' + phone + 'Add to home screen</button>' +
+      '<button class="a2hs-later" type="button" data-install-later>Not now</button></section>';
+  }
+  function installSheet() {
+    const share = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"></path><path d="M7 8l5-5 5 5"></path><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"></path></svg>';
+    const plus = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M12 8v8M8 12h8"></path></svg>';
+    const steps = isIOS()
+      ? ['Tap the <b>Share</b> button ' + share + ' in the browser toolbar', 'Scroll down and choose <b>Add to Home Screen</b> ' + plus, 'Tap <b>Add</b> in the top corner']
+      : ['Tap the browser menu <b>⋮</b> in the top corner', 'Choose <b>Add to Home screen</b> or <b>Install app</b>', 'Tap <b>Add</b> or <b>Install</b>'];
+    const el = document.createElement('div');
+    el.className = 'a2hs-sheet-wrap';
+    el.innerHTML = '<div class="a2hs-sheet-bg" data-sheet-close></div><div class="a2hs-sheet" role="dialog" aria-modal="true" aria-label="Add to home screen"><div class="a2hs-grab"></div>' +
+      '<div class="a2hs-sheet-hd"><img src="icon-192.png" alt="" width="52" height="52"><div><h2>' + esc(SITE_NAME) + '</h2><span>Add it to your home screen like an app</span></div></div>' +
+      steps.map((t, i) => '<div class="a2hs-step"><b>' + (i + 1) + '</b><span>' + t + '</span></div>').join('') +
+      '<button class="a2hs-done" type="button" data-sheet-close>Got it</button></div>';
+    document.body.appendChild(el);
+    el.querySelector('.a2hs-done').focus();
+  }
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; if (DATA && !app.querySelector('.a2hs')) route(); });
+  window.addEventListener('appinstalled', () => { installPrompt = null; const b = app.querySelector('.a2hs'); if (b) b.remove(); });
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-install], [data-install-later], [data-sheet-close]');
+    if (!t) return;
+    if (t.hasAttribute('data-sheet-close')) { const w = document.querySelector('.a2hs-sheet-wrap'); if (w) w.remove(); return; }
+    if (t.hasAttribute('data-install-later')) { store.set(STORE_A2HS, String(Date.now())); const b = app.querySelector('.a2hs'); if (b) b.remove(); return; }
+    if (installPrompt) {
+      const ev = installPrompt; installPrompt = null;
+      ev.prompt();
+      try { const r = await ev.userChoice; if (r && r.outcome === 'accepted') { const b = app.querySelector('.a2hs'); if (b) b.remove(); } } catch (err) { /* ignore */ }
+    } else installSheet();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const w = document.querySelector('.a2hs-sheet-wrap'); if (w) w.remove(); } });
 
   /* ---------- routing ---------- */
   function route() {
