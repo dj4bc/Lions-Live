@@ -229,24 +229,20 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 .a2hs-step svg { vertical-align: -3px; }
 .a2hs-done { height: 46px; border: 0; border-radius: 12px; background: var(--blue); color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; }
 
-/* Game flow worm (box score page) */
-.worm-card { padding-bottom: 6px; }
-.worm { display: block; width: 100%; height: auto; margin: 4px 0 6px; overflow: visible; }
-.worm .wgrid { stroke: var(--line-soft); stroke-width: 1; }
-.worm .wzero { stroke: var(--muted-2); stroke-width: 1; stroke-dasharray: 3 3; }
-.worm .warea.us { fill: var(--blue); opacity: 0.16; }
-.worm .warea.them { fill: var(--muted-2); opacity: 0.16; }
-.worm .wline { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.worm .wdot { fill: var(--blue); stroke: var(--card); stroke-width: 2; }
-.worm .whit { fill: transparent; }
-.worm .wpt:hover .wdot { r: 6.5; }
-.worm .wlab { font-size: 16px; fill: var(--muted); font-family: var(--body); }
-.worm-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 16px 0; font-size: 13px; color: var(--muted); }
-.worm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-.worm-legend i.us { background: var(--blue); opacity: 0.5; }
-.worm-legend i.them { background: var(--muted-2); opacity: 0.4; }
-.worm-legend b { margin-left: auto; color: var(--ink); font-size: 14px; }
-.worm-card .worm { padding: 0 8px; box-sizing: border-box; }
-.qtable td:first-child { font-weight: 600; }
-.worm-card .fine { margin: 4px 16px 10px; font-size: 12px; color: var(--muted-2); }
-.worm { max-width: 640px; margin-left: auto; margin-right: auto; }
+/* Quarter by quarter (box score page) */
+.worm-card { padding-bottom: 0; }
+.qb-head, .qb-row { display: grid; grid-template-columns: 34px 1fr 1fr 56px; align-items: center; gap: 8px; padding: 8px 16px; }
+.qb-head { font-size: 12px; font-weight: 700; color: var(--muted); padding-top: 12px; padding-bottom: 6px; }
+.qb-head span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qb-head .qb-us { text-align: right; }
+.qb-row { border-top: 1px solid var(--line-soft); }
+.qb-q { font-family: var(--display); font-weight: 800; font-size: 18px; color: var(--navy); }
+.qb-l, .qb-r { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.qb-l { justify-content: flex-end; }
+.qb-bar { height: 18px; border-radius: 4px; min-width: 3px; flex: 0 0 auto; }
+.qb-bar.us { background: var(--blue); }
+.qb-bar.them { background: var(--silver); }
+.qb-n { font-size: 13px; font-weight: 700; color: var(--ink-2); min-width: 16px; text-align: center; }
+.qb-run { text-align: right; font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.qb-foot { padding: 10px 16px 14px; font-size: 14px; color: var(--ink-2); border-top: 1px solid var(--line); }
+.worm-card .fine { margin: 0 16px 12px; font-size: 12px; color: var(--muted-2); }
