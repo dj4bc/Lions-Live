@@ -277,3 +277,10 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 .swipe-dots button { width: 28px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; position: relative; }
 .swipe-dots button::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--line); transition: width .2s, margin .2s; }
 .swipe-dots button.on::after { width: 20px; margin-left: -10px; border-radius: 4px; background: var(--blue); }
+
+/* Sortable stat tables */
+table.sortable thead th { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+table.sortable thead th:hover { color: var(--ink); }
+table.sortable thead th[aria-sort="ascending"], table.sortable thead th[aria-sort="descending"] { color: var(--blue); }
+table.sortable thead th[aria-sort="descending"]::after { content: " \25BE"; }
+table.sortable thead th[aria-sort="ascending"]::after { content: " \25B4"; }

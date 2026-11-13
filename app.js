@@ -442,7 +442,7 @@
     const extra = rows.some((p) => p.tf || p.uf);
     const tot = rows.reduce((t, p) => { ['pts', 'ft', 'p2', 'p3', 'pf', 'tf', 'uf'].forEach((k) => { t[k] += p[k]; }); return t; }, { pts: 0, ft: 0, p2: 0, p3: 0, pf: 0, tf: 0, uf: 0 });
     return '<article class="card' + (isLions ? ' mine' : '') + '"><div class="card-head"><h3 class="with-logo">' + logo(team, 28) + esc(title) + '</h3><span class="meta">' + tot.pts + ' pts</span></div>' +
-      '<div class="table-wrap"><table class="box"><thead><tr><th class="num">#</th><th>Player</th><th class="num">PTS</th><th class="num">FT</th><th class="num">2P</th><th class="num">3P</th><th class="num">PF</th>' + (extra ? '<th class="num">TF</th><th class="num">UF</th>' : '') + '</tr></thead><tbody>' +
+      '<div class="table-wrap"><table class="box sortable"><thead><tr><th class="num">#</th><th>Player</th><th class="num">PTS</th><th class="num">FT</th><th class="num">2P</th><th class="num">3P</th><th class="num">PF</th>' + (extra ? '<th class="num">TF</th><th class="num">UF</th>' : '') + '</tr></thead><tbody>' +
       (rows.length ? rows.map((p) => '<tr' + (p.pf >= 5 ? ' class="fouled-out"' : '') + '>' + playerCell(p) + '<td class="num strong">' + p.pts + '</td><td class="num">' + p.ft + '</td><td class="num">' + p.p2 + '</td><td class="num">' + p.p3 + '</td><td class="num' + (p.pf >= 4 ? ' warn' : '') + '">' + p.pf + '</td>' + (extra ? '<td class="num">' + p.tf + '</td><td class="num">' + p.uf + '</td>' : '') + '</tr>').join('')
         : '<tr><td colspan="' + (extra ? 9 : 7) + '" class="empty">No player stats recorded for this team yet. Some games only get stats entered after the final siren, or not at all.</td></tr>') +
       '</tbody>' + (rows.length ? '<tfoot><tr><td></td><td>Team</td><td class="num strong">' + tot.pts + '</td><td class="num">' + tot.ft + '</td><td class="num">' + tot.p2 + '</td><td class="num">' + tot.p3 + '</td><td class="num">' + tot.pf + '</td>' + (extra ? '<td class="num">' + tot.tf + '</td><td class="num">' + tot.uf + '</td>' : '') + '</tr></tfoot>' : '') +
@@ -574,6 +574,7 @@
         const sides = [v.us, v.them].filter(Boolean);
         gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions, t)).join('') +
           '<p class="fine">FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
+        applySorts(gameEl);
       } catch (e) {
         if (gameEl.isConnected) gameEl.innerHTML = '<div class="notice">Couldn\'t load the box score (' + esc(e.message) + '). It may not be recorded for this game.</div>';
       }
@@ -585,14 +586,59 @@
       try {
         const rows = (await getStats('t' + id, { teamId: id, comp: DATA.teams.get(id).comp.id }, 5 * 6e4)).filter((p) => p.teamId === id).sort((a, b) => b.pts - a.pts || num(a.shirt) - num(b.shirt));
         if (!teamEl.isConnected) return;
-        teamEl.innerHTML = rows.length ? '<div class="table-wrap"><table class="box"><thead><tr><th class="num">#</th><th>Player</th><th class="num">GP</th><th class="num">PTS</th><th class="num">AVG</th><th class="num opt">FT</th><th class="num opt">2P</th><th class="num opt">3P</th><th class="num">PF</th></tr></thead><tbody>' +
+        teamEl.innerHTML = rows.length ? '<div class="table-wrap"><table class="box sortable"><thead><tr><th class="num">#</th><th>Player</th><th class="num">GP</th><th class="num">PTS</th><th class="num">AVG</th><th class="num opt">FT</th><th class="num opt">2P</th><th class="num opt">3P</th><th class="num">PF</th></tr></thead><tbody>' +
           rows.map((p) => '<tr>' + playerCell(p) + '<td class="num">' + p.games + '</td><td class="num strong">' + p.pts + '</td><td class="num">' + p.avg.toFixed(1) + '</td><td class="num opt">' + p.ft + '</td><td class="num opt">' + p.p2 + '</td><td class="num opt">' + p.p3 + '</td><td class="num">' + p.pf + '</td></tr>').join('') +
           '</tbody></table></div>' : '<div class="empty">No player stats recorded yet.</div>';
+        applySorts(teamEl);
       } catch (e) {
         if (teamEl.isConnected) teamEl.innerHTML = '<div class="empty">Couldn\'t load player stats right now.</div>';
       }
     }
   }
+
+  /* ---------- sortable stat tables ---------- */
+  // Tap a column header to sort; tap again to flip. The choice is kept while the page refreshes.
+  const sorts = {};
+  const sortKey = (table) => location.hash + '|' + [...app.querySelectorAll('table.sortable')].indexOf(table);
+  function sortTable(table, col, dir) {
+    const tb = table.tBodies[0];
+    const rows = [...tb.rows];
+    if (!rows.length || rows[0].querySelector('.empty')) return;
+    const val = (r) => { const s = (r.cells[col] ? r.cells[col].textContent : '').trim(); const n = parseFloat(s); return isNaN(n) ? s.toLowerCase() : n; };
+    const numeric = rows.some((r) => typeof val(r) === 'number');
+    rows.sort((a, b) => {
+      let x = val(a), y = val(b);
+      if (numeric) { x = typeof x === 'number' ? x : -Infinity; y = typeof y === 'number' ? y : -Infinity; }
+      const c = x < y ? -1 : x > y ? 1 : 0;
+      return dir === 'asc' ? c : -c;
+    });
+    rows.forEach((r) => tb.appendChild(r));
+    [...table.tHead.rows[0].cells].forEach((th, i) => {
+      th.setAttribute('aria-sort', i === col ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    });
+  }
+  function applySorts(root) {
+    root.querySelectorAll('table.sortable').forEach((table) => {
+      const ths = [...table.tHead.rows[0].cells];
+      ths.forEach((th) => { th.tabIndex = 0; th.setAttribute('role', 'button'); });
+      const s = sorts[sortKey(table)];
+      if (s) sortTable(table, s.col, s.dir);
+      else { const i = ths.findIndex((th) => th.textContent === 'PTS'); if (i >= 0) ths[i].setAttribute('aria-sort', 'descending'); }
+    });
+  }
+  function onSortHeader(e) {
+    const th = e.target.closest && e.target.closest('table.sortable thead th');
+    if (!th || (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    const table = th.closest('table'), col = th.cellIndex, key = sortKey(table);
+    const cur = th.getAttribute('aria-sort');
+    const textCol = th.textContent === 'Player';
+    const dir = cur === 'descending' ? 'asc' : cur === 'ascending' ? 'desc' : textCol || th.textContent === '#' ? 'asc' : 'desc';
+    sorts[key] = { col, dir };
+    sortTable(table, col, dir);
+  }
+  app.addEventListener('click', onSortHeader);
+  app.addEventListener('keydown', onSortHeader);
 
   /* ---------- add to home screen ---------- */
   // Android/desktop Chrome hand us an install prompt; iPhone needs the Share > Add to Home Screen steps.
