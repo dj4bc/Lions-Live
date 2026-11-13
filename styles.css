@@ -305,3 +305,26 @@ table.sortable thead th[aria-sort="ascending"]::after { content: " \25B4"; }
 .flow-strip .fq b { font-family: var(--display); font-size: 24px; font-weight: 700; color: var(--ink); white-space: nowrap; }
 .flow-strip .fq.won { background: var(--tint); }
 .flow-strip .fq.lost { background: var(--bg); }
+
+/* Sponsors */
+.sp-logo { display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.sp-logo.dark { background: #111; border-color: #111; }
+.sp-logo img { max-width: 90%; max-height: 80%; object-fit: contain; }
+.sp-strip { background: #fff; border-bottom: 1px solid var(--line); }
+.sp-strip .wrap { display: flex; align-items: center; justify-content: center; gap: 12px; padding-top: 8px; padding-bottom: 8px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.sp-strip .sp-logo { width: 150px; height: 38px; }
+.sp-wall { border-top: 1px solid var(--line); padding: 20px 0 8px; margin-top: 8px; }
+.sp-wall h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); text-align: center; }
+.sp-wall-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 720px; margin: 0 auto; }
+.sp-wall-grid .sp-logo { height: 56px; }
+.sp-wall-grid .sp-logo.major { grid-column: 1 / -1; height: 76px; }
+.sp-slot { display: flex; align-items: center; justify-content: center; height: 56px; border: 1.5px dashed var(--line); border-radius: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted-2); text-align: center; }
+.sp-card { position: relative; display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.sp-card .sp-logo.sq { width: 84px; height: 84px; flex: 0 0 auto; }
+.sp-card b { display: block; font-size: 16px; color: var(--ink); padding-right: 80px; }
+.sp-card p { margin: 4px 0 8px; font-size: 13px; color: var(--muted); }
+.sp-card .sp-cta { font-size: 13px; font-weight: 700; color: var(--blue); }
+.sp-card .sp-tag { position: absolute; top: 8px; right: 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted-2); }
+.sp-team { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; }
+.sp-team span { font-size: 12px; line-height: 1.3; color: var(--head-sub); }
+.sp-team .sp-logo { width: 104px; height: 46px; margin-left: auto; border: 0; }

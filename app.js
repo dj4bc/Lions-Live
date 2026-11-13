@@ -235,7 +235,9 @@
     } else {
       const byDay = new Map();
       upcoming.forEach((g) => { const k = dayKey(g.start); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(g); });
+      let dayN = 0;
       byDay.forEach((list) => {
+        if (dayN++ === 1) html += sponsorCard();
         html += '<section><h2 class="day-title">' + esc(dayLabel(list[0].start) === fDay.format(list[0].start) ? fLongDay.format(list[0].start) : dayLabel(list[0].start) + ' · ' + fDay.format(list[0].start)) + '</h2></section>';
         const bySlot = new Map();
         list.forEach((g) => { const k = time(g.start); if (!bySlot.has(k)) bySlot.set(k, []); bySlot.get(k).push(g); });
@@ -252,6 +254,7 @@
         });
         html += '</div>';
       });
+      if (dayN === 1) html += sponsorCard();
     }
     html += installBanner();
     return html;
@@ -364,7 +367,7 @@
       '<button class="star" type="button" data-star="' + id + '" aria-pressed="' + mine + '">' + starIcon + (mine ? 'My team' : 'Add to my teams') + '</button></div>' +
       '<div class="hero-stats"><div class="hero-stat"><span>Record</span><b>' + rec.W + '–' + rec.L + (rec.D ? '–' + rec.D : '') + '</b></div>' +
       '<div class="hero-stat"><span>For / against</span><b>' + rec.pf + '–' + rec.pa + '</b></div>' +
-      '<div class="hero-stat"><span>Avg margin</span><b>' + (rec.avg > 0 ? '+' : '') + rec.avg + '</b></div></div></section>';
+      '<div class="hero-stat"><span>Avg margin</span><b>' + (rec.avg > 0 ? '+' : '') + rec.avg + '</b></div></div>' + teamSponsor(t) + '</section>';
 
     if (next) {
       const v = view(next, id);
@@ -607,6 +610,32 @@
     }
   }
 
+  /* ---------- sponsors ---------- */
+  const SP = CFG.sponsors || {};
+  const sponsor = (k) => (k && SP.list && SP.list[k]) || null;
+  const spLink = (s, cls, inner) => '<a class="' + cls + '" href="' + esc(s.url) + '" target="_blank" rel="noopener sponsored">' + inner + '</a>';
+  const spLogo = (s, cls) => spLink(s, 'sp-logo' + (s.dark ? ' dark' : '') + (cls ? ' ' + cls : ''), '<img src="' + esc(s.logo) + '" alt="' + esc(s.name) + '" loading="lazy">');
+  function renderSponsorFrame() {
+    const strip = document.getElementById('sponsor-strip'), p = sponsor(SP.presenting);
+    if (strip && p) strip.innerHTML = '<div class="wrap">Game day presented by ' + spLogo(p) + '</div>';
+    const wall = document.getElementById('sponsor-wall'), list = (SP.wall || []).map(sponsor).filter(Boolean);
+    if (wall && (list.length || SP.wallSlots)) {
+      wall.innerHTML = '<section class="sp-wall"><h2>Thanks to our sponsors</h2><div class="sp-wall-grid">' +
+        list.map((s, i) => spLogo(s, i < 2 ? 'major' : '')).join('') +
+        Array.from({ length: SP.wallSlots || 0 }, () => '<span class="sp-slot">Your logo here</span>').join('') + '</div></section>';
+    }
+  }
+  function sponsorCard() {
+    const s = sponsor(SP.feed);
+    if (!s) return '';
+    return '<aside class="sp-card"><span class="sp-tag">Club sponsor</span>' + spLogo(s, 'sq') + '<div><b>' + esc(s.name) + '</b>' +
+      (s.blurb ? '<p>' + esc(s.blurb) + '</p>' : '') + spLink(s, 'sp-cta', esc(s.cta || 'Visit website') + ' →') + '</div></aside>';
+  }
+  function teamSponsor(t) {
+    const s = sponsor(SP.teams && SP.teams[groupName(t) + ' ' + t.short]);
+    return s ? '<div class="sp-team"><span>' + esc(groupName(t)) + ' proudly<br>supported by</span>' + spLogo(s) + '</div>' : '';
+  }
+
   /* ---------- sortable stat tables ---------- */
   // Tap a column header to sort; tap again to flip. The choice is kept while the page refreshes.
   const sorts = {};
@@ -713,6 +742,8 @@
     else html = pageHome();
     app.innerHTML = html;
     document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === nav));
+    const strip = document.getElementById('sponsor-strip');
+    if (strip) strip.hidden = !(nav === 'home' && strip.innerHTML);
     const title = parts[0] === 'game' ? 'Box score' : { home: 'Game day', results: 'Results', teams: 'Teams' }[nav];
     document.title = title + ' · Lions Den';
     hydrateStats();
@@ -774,5 +805,6 @@
 
   document.getElementById('season-label').textContent = 'Central Districts Basketball · ' + CFG.seasonLabel;
   document.getElementById('source-link').href = CFG.competitions[0].sourceUrl;
+  renderSponsorFrame();
   load(false);
 })();
