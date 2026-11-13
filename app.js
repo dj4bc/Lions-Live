@@ -408,9 +408,9 @@
   const num = (x) => { const n = parseFloat(x); return isNaN(n) ? 0 : n; };
   function statsUrl(q) {
     const mock = new URLSearchParams(location.search).get('mock');
-    if (mock) return 'stats-' + (q.matchId ? 'm' + q.matchId : 't' + q.teamId) + '.json';
+    if (mock) return 'stats-' + (q.matchId ? 'm' + q.matchId : 't' + q.teamId) + (q.period ? '-p' + q.period : '') + '.json';
     return CFG.apiBase + '/livescores/stats/public/v2/scoringByPlayer?competitionId=' + q.comp +
-      '&aggregate=ALL&search=&sportRefId=2&userId=&period=&offset=' + (q.teamId ? '0' : '') + '&limit=' + (q.teamId ? '100' : '') +
+      '&aggregate=ALL&search=&sportRefId=2&userId=&period=' + (q.period || '') + '&offset=' + (q.teamId ? '0' : '') + '&limit=' + (q.teamId ? '100' : '') +
       '&matchId=' + (q.matchId || '') + (q.teamId ? '&teamId=' + q.teamId : '');
   }
   async function getStats(key, q, maxAgeMs) {
@@ -460,10 +460,109 @@
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div></section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
+        '<div class="swipe"><div class="swipe-track">' +
+        '<section class="card worm-card" data-flow="' + g.id + '"><div class="card-head"><h3>Game flow</h3><span class="meta">Margin at the end of each quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
+        '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
+        '</div><div class="swipe-dots" role="tablist"><button type="button" class="on" aria-label="Game flow"></button><button type="button" aria-label="Quarter by quarter"></button></div></div>' +
         '<section class="box-grid" data-game-stats="' + g.id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading box score…</div></section>');
   }
 
+
+  /* ---------- game flow ("worm") ---------- */
+  // BasketballConnect's public stats can be filtered by period, which gives each team's points per quarter.
+  // The worm plots our lead at the end of each quarter.
+  async function hydrateWorm(el) {
+    const id = parseInt(el.dataset.worm, 10);
+    const g = DATA.games.find((x) => x.id === id);
+    const v = view(g);
+    const flowEl = app.querySelector('[data-flow="' + id + '"]');
+    const drop = () => { const w = el.closest('.swipe'); if (w) w.remove(); else { el.remove(); if (flowEl) flowEl.remove(); } };
+    if (!v.them) { drop(); return; }
+    let per;
+    try {
+      const age = g.status === 'live' ? 25e3 : 6e5;
+      per = await Promise.all([1, 2, 3, 4, 5].map((p) => getStats('m' + id + 'p' + p, { matchId: id, comp: g.comp.id, period: p }, age)));
+    } catch (e) { if (el.isConnected) drop(); return; }
+    if (!el.isConnected) return;
+    const pts = (rows, t) => rows.filter((r) => r.teamId === t.id).reduce((a, r) => a + r.pts, 0);
+    let q = per.map((rows) => ({ us: pts(rows, v.us), them: pts(rows, v.them) }));
+    let last = 0; q.forEach((x, i) => { if (x.us || x.them) last = i; });
+    if (!q.some((x) => x.us || x.them)) { drop(); return; }
+    q = q.slice(0, Math.max(last + 1, g.status === 'live' ? last + 1 : Math.min(4, q.length)));
+    const label = (i) => (i >= 4 ? 'OT' : 'Q' + (i + 1));
+    const usName = v.us.short, themName = v.them.ours ? v.them.short : v.them.club;
+    const max = Math.max(1, ...q.map((x) => Math.max(x.us, x.them)));
+    let ru = 0, rt = 0;
+    const rows = q.map((x, i) => {
+      ru += x.us; rt += x.them;
+      const tip = label(i) + ': ' + usName + ' ' + x.us + ', ' + themName + ' ' + x.them + ' (running ' + ru + '–' + rt + ')';
+      return '<div class="qb-row" title="' + esc(tip) + '"><span class="qb-q">' + label(i) + '</span>' +
+        '<div class="qb-l"><span class="qb-n">' + x.us + '</span><div class="qb-bar us" style="width:' + (x.us / max * 78).toFixed(1) + '%"></div></div>' +
+        '<div class="qb-r"><div class="qb-bar them" style="width:' + (x.them / max * 78).toFixed(1) + '%"></div><span class="qb-n">' + x.them + '</span></div>' +
+        '<span class="qb-run">' + ru + '–' + rt + '</span></div>';
+    }).join('');
+    const won = q.filter((x) => x.us > x.them).length, lost = q.filter((x) => x.us < x.them).length, drew = q.length - won - lost;
+    const best = q.reduce((bi, x, i) => (x.us > q[bi].us ? i : bi), 0);
+    const live = g.status === 'live';
+    const summary = (live ? 'So far: won ' : 'Won ') + '<b>' + won + '</b> ' + (won === 1 ? 'quarter' : 'quarters') + ', lost <b>' + lost + '</b>' + (drew ? ', drew <b>' + drew + '</b>' : '') +
+      '. Best quarter: <b>' + label(best) + ' (' + q[best].us + ' pts)</b>.';
+    el.innerHTML = '<div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div>' +
+      '<div class="qb-head"><span></span><span class="qb-us">' + esc(usName) + '</span><span>' + esc(themName) + '</span><span class="qb-run">Run</span></div>' +
+      rows + '<div class="qb-foot">' + summary + '</div>' +
+      ((ru !== (v.su || 0) || rt !== (v.sth || 0)) && g.status === 'final' ? '<p class="fine">Quarter scores come from player stats, which don\'t quite add up to the final score for this game.</p>' : '');
+
+    if (flowEl) renderFlow(flowEl, g, v, q, label, usName, themName);
+    setupSwipe(el.closest('.swipe'));
+  }
+
+  // Swipe between the quarter-by-quarter and game-flow cards; the dots follow and can be tapped.
+  function setupSwipe(w) {
+    if (!w || w.dataset.ready) return;
+    w.dataset.ready = '1';
+    const track = w.querySelector('.swipe-track'), dots = [...w.querySelectorAll('.swipe-dots button')];
+    const step = () => (track.children[1] ? track.children[1].offsetLeft - track.children[0].offsetLeft : track.clientWidth);
+    const mark = () => { const i = Math.round(track.scrollLeft / step()); dots.forEach((d, j) => { d.classList.toggle('on', i === j); d.setAttribute('aria-selected', i === j); }); };
+    track.addEventListener('scroll', () => { cancelAnimationFrame(mark.f); mark.f = requestAnimationFrame(mark); }, { passive: true });
+    dots.forEach((d, j) => d.addEventListener('click', () => track.scrollTo({ left: j * step(), behavior: 'smooth' })));
+  }
+
+  // The worm plots our lead at the end of each quarter.
+  function renderFlow(el, g, v, q, label, usName, themName) {
+    const id = g.id;
+    let cu = 0, ct = 0;
+    const pts2 = [{ x: 0, m: 0, us: 0, them: 0, lab: 'Start' }].concat(q.map((x, i) => { cu += x.us; ct += x.them; return { x: i + 1, m: cu - ct, us: cu, them: ct, lab: label(i) }; }));
+    const W = 600, H = 220, L = 48, R = 20, T = 18, B = 34;
+    const n = pts2.length - 1;
+    const maxAbs = Math.max(4, ...pts2.map((p) => Math.abs(p.m)));
+    const X = (x) => L + (x / n) * (W - L - R);
+    const Y = (m) => T + (1 - (m + maxAbs) / (2 * maxAbs)) * (H - T - B);
+    const line = pts2.map((p, i) => (i ? 'L' : 'M') + X(p.x).toFixed(1) + ' ' + Y(p.m).toFixed(1)).join(' ');
+    const area = line + ' L' + X(n) + ' ' + Y(0) + ' L' + X(0) + ' ' + Y(0) + ' Z';
+    const tip = (p) => p.lab + ': ' + usName + ' ' + p.us + ' – ' + p.them + ' ' + themName + (p.m ? ' (' + (p.m > 0 ? '+' : '') + p.m + ')' : ' (level)');
+    const fin = pts2[n];
+    const svg = '<svg class="worm" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc('Score margin by quarter. ' + pts2.slice(1).map(tip).join('. ')) + '">' +
+      '<defs><clipPath id="wa' + id + '"><rect x="0" y="0" width="' + W + '" height="' + Y(0) + '"></rect></clipPath><clipPath id="wb' + id + '"><rect x="0" y="' + Y(0) + '" width="' + W + '" height="' + (H - Y(0)) + '"></rect></clipPath></defs>' +
+      pts2.slice(1).map((p) => '<line class="wgrid" x1="' + X(p.x) + '" x2="' + X(p.x) + '" y1="' + T + '" y2="' + (H - B) + '"></line>').join('') +
+      '<path class="warea us" clip-path="url(#wa' + id + ')" d="' + area + '"></path><path class="warea them" clip-path="url(#wb' + id + ')" d="' + area + '"></path>' +
+      '<line class="wzero" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"></line>' +
+      '<path class="wline" d="' + line + '"></path>' +
+      pts2.map((p) => '<g class="wpt"><circle class="whit" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="16"></circle><circle class="wdot" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="4.5"></circle><title>' + esc(tip(p)) + '</title></g>').join('') +
+      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(maxAbs) + 4) + '" text-anchor="end">+' + maxAbs + '</text>' +
+      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(0) + 4) + '" text-anchor="end">0</text>' +
+      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(-maxAbs) + 4) + '" text-anchor="end">−' + maxAbs + '</text>' +
+      pts2.slice(1).map((p) => '<text class="wlab" x="' + X(p.x) + '" y="' + (H - 8) + '" text-anchor="middle">' + p.lab + '</text>').join('') +
+      '</svg>';
+    const legend = '<div class="worm-legend"><span><i class="us"></i>' + esc(usName) + ' ahead</span><span><i class="them"></i>' + esc(themName) + ' ahead</span>' +
+      '<b>' + (fin.m > 0 ? esc(usName) + ' by ' + fin.m : fin.m < 0 ? esc(themName) + ' by ' + (-fin.m) : 'Level') + (g.status === 'live' ? ' so far' : '') + '</b></div>';
+    const table = '<div class="table-wrap"><table class="box qtable"><thead><tr><th>Team</th>' + q.map((x, i) => '<th class="num">' + label(i) + '</th>').join('') + '<th class="num">T</th></tr></thead><tbody>' +
+      '<tr><td>' + esc(usName) + '</td>' + q.map((x) => '<td class="num">' + x.us + '</td>').join('') + '<td class="num strong">' + fin.us + '</td></tr>' +
+      '<tr><td>' + esc(themName) + '</td>' + q.map((x) => '<td class="num">' + x.them + '</td>').join('') + '<td class="num strong">' + fin.them + '</td></tr></tbody></table></div>';
+    el.innerHTML = '<div class="card-head"><h3>Game flow</h3><span class="meta">Margin at the end of each quarter</span></div>' + legend + svg + table;
+  }
+
   async function hydrateStats() {
+    const wormEl = app.querySelector('[data-worm]');
+    if (wormEl) hydrateWorm(wormEl);
     const gameEl = app.querySelector('[data-game-stats]');
     if (gameEl) {
       const id = parseInt(gameEl.dataset.gameStats, 10);
