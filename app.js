@@ -1,4 +1,4 @@
-/* Lions Results: a static site that reads Central Districts Lions games
+/* Lions Den: a static site that reads Central Districts Lions games
    straight from the BasketballConnect (Squadi) live-scores API. */
 (function () {
   'use strict';
@@ -180,7 +180,8 @@
       '<span class="live-foot">' + esc(g.venueShort + ' · ' + g.court) + ' · tap for the box score</span></a>';
   }
 
-  function myTeamId() { const v = parseInt(store.get(STORE_MY_TEAM), 10); return isNaN(v) ? null : v; }
+  function myTeamIds() { return String(store.get(STORE_MY_TEAM) || '').split(',').map((v) => parseInt(v, 10)).filter((v) => !isNaN(v)); }
+  function isMyTeam(id) { return myTeamIds().includes(id); }
   function teamGames(id) { return DATA.games.filter((g) => (g.t1 && g.t1.id === id) || (g.t2 && g.t2.id === id)); }
 
   /* ---------- pages ---------- */
@@ -192,15 +193,16 @@
     const recent = DATA.games.filter((g) => g.status === 'final' && !g.bye && g.start.getTime() > now - 2 * 864e5).reverse();
     let html = '';
 
-    const mine = myTeamId();
-    if (mine && DATA.teams.has(mine)) {
-      const t = DATA.teams.get(mine);
-      const tg = teamGames(mine);
-      const next = tg.find((g) => g.status !== 'final');
-      const last = tg.filter((g) => g.status === 'final').pop();
-      html += '<section><h2 class="section-title">My team</h2><div class="card mine"><div class="card-head"><h3>' + esc(groupName(t) + ' ' + t.short) + '</h3><a class="meta" href="#/team/' + t.id + '">Team page</a></div>' +
-        (next ? gameRow(next, { teamId: mine, showDivision: false }) : '<div class="empty">No more games scheduled.</div>') +
-        (last ? gameRow(last, { teamId: mine, showDivision: false }) : '') + '</div></section>';
+    const mine = myTeamIds().filter((id) => DATA.teams.has(id)).map((id) => DATA.teams.get(id)).sort(teamSort);
+    if (mine.length) {
+      html += '<section><h2 class="section-title">' + (mine.length > 1 ? 'My teams' : 'My team') + '</h2><div class="grid">' + mine.map((t) => {
+        const tg = teamGames(t.id);
+        const next = tg.find((g) => g.status !== 'final');
+        const last = tg.filter((g) => g.status === 'final').pop();
+        return '<div class="card mine"><div class="card-head"><h3>' + esc(groupName(t) + ' ' + t.short) + '</h3><a class="meta" href="#/team/' + t.id + '">Team page</a></div>' +
+          (next ? gameRow(next, { teamId: t.id, showDivision: false }) : '<div class="empty">No more games scheduled.</div>') +
+          (last ? gameRow(last, { teamId: t.id, showDivision: false }) : '') + '</div>';
+      }).join('') + '</div></section>';
     }
 
     html += '<div class="page-head"><div><div class="eyebrow">' + esc(fLongDay.format(new Date())) + '</div><h1 class="page-title">Game day</h1>' +
@@ -312,14 +314,14 @@
     const teams = allTeams.filter((t) => (ui.age === 'All' || t.age === ui.age) && (ui.sex === 'All' || t.sex === ui.sex));
     const groups = new Map();
     teams.forEach((t) => { const k = groupName(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
-    const mine = myTeamId();
+    const mine = myTeamIds();
     let html = '<div class="page-head"><div><div class="eyebrow">' + esc(CFG.seasonLabel) + '</div><h1 class="page-title">Teams</h1><div class="page-sub">' + allTeams.length + ' Lions teams. Tap a team, then star it to pin it to Game day.</div></div></div>' + filterChips(ages) + (teams.length ? '' : '<div class="notice">No teams match these filters.</div>') + '<section class="grid">';
     groups.forEach((list, name) => {
       html += '<article class="card"><div class="card-head"><h2>' + esc(name) + '</h2><span class="meta">' + list.length + ' teams</span></div>' +
         list.map((t) => {
           const r = teamRecord(t.id);
           const last = teamGames(t.id).slice(-1)[0];
-          return '<a class="row" href="#/team/' + t.id + '"><div class="row-main"><span class="row-title">' + esc(t.short) + (t.id === mine ? ' <span class="vs">★ My team</span>' : '') + '</span>' +
+          return '<a class="row" href="#/team/' + t.id + '"><div class="row-main"><span class="row-title">' + esc(t.short) + (mine.includes(t.id) ? ' <span class="vs">★ My team</span>' : '') + '</span>' +
             '<span class="row-sub">' + esc(last ? last.divisionShort : '') + '</span></div>' +
             '<span class="form">' + r.done.slice(-5).map((v) => badge(v.res === 'CD' ? (v.su > v.sth ? 'W' : 'L') : v.res, true)).join('') + '</span>' +
             '<span class="score" style="font-size:20px">' + r.W + '–' + r.L + (r.D ? '–' + r.D : '') + '</span></a>';
@@ -338,11 +340,11 @@
     const next = live || upcoming[0];
     const results = tg.filter((g) => g.status === 'final').reverse();
     const div = (next || tg[tg.length - 1] || {}).divisionShort || '';
-    const mine = myTeamId() === id;
+    const mine = isMyTeam(id);
 
     let html = '<p style="margin:0"><a href="#/teams">← All teams</a></p><div class="team-layout"><div style="display:flex;flex-direction:column;gap:20px">' +
       '<section class="team-hero"><div class="team-hero-top"><img src="shield.png" alt=""><div class="team-hero-name"><div class="age">' + esc(groupName(t)) + '</div><h1>' + esc(t.short) + '</h1><div class="div">' + esc(div) + '</div></div>' +
-      '<button class="star" type="button" data-star="' + id + '" aria-pressed="' + mine + '">' + starIcon + (mine ? 'My team' : 'Set as my team') + '</button></div>' +
+      '<button class="star" type="button" data-star="' + id + '" aria-pressed="' + mine + '">' + starIcon + (mine ? 'My team' : 'Add to my teams') + '</button></div>' +
       '<div class="hero-stats"><div class="hero-stat"><span>Record</span><b>' + rec.W + '–' + rec.L + (rec.D ? '–' + rec.D : '') + '</b></div>' +
       '<div class="hero-stat"><span>For / against</span><b>' + rec.pf + '–' + rec.pa + '</b></div>' +
       '<div class="hero-stat"><span>Avg margin</span><b>' + (rec.avg > 0 ? '+' : '') + rec.avg + '</b></div></div></section>';
@@ -490,7 +492,7 @@
     app.innerHTML = html;
     document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === nav));
     const title = parts[0] === 'game' ? 'Box score' : { home: 'Game day', results: 'Results', teams: 'Teams' }[nav];
-    document.title = title + ' · Lions Results';
+    document.title = title + ' · Lions Den';
     hydrateStats();
   }
 
@@ -502,7 +504,9 @@
     if (b.dataset.sex != null) { ui.sex = b.dataset.sex; route(); return; }
     if (b.dataset.star != null) {
       const id = parseInt(b.dataset.star, 10);
-      store.set(STORE_MY_TEAM, myTeamId() === id ? null : String(id));
+      const ids = myTeamIds();
+      const nextIds = ids.includes(id) ? ids.filter((v) => v !== id) : ids.concat(id);
+      store.set(STORE_MY_TEAM, nextIds.length ? nextIds.join(',') : null);
       route();
     }
   });
