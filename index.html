@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lions Results · Central Districts Basketball</title>
+  <meta name="description" content="Results, fixtures and live scores for every Central Districts Lions junior team.">
+  <meta name="theme-color" content="#163A80">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="#/">
+        <img src="shield.png" alt="" width="44" height="51">
+        <span class="brand-text">
+          <span class="brand-title">LIONS RESULTS</span>
+          <span class="brand-sub" id="season-label">Central Districts Basketball</span>
+        </span>
+      </a>
+      <nav class="main-nav" aria-label="Main">
+        <a href="#/" data-nav="home">Game day</a>
+        <a href="#/results" data-nav="results">Results</a>
+        <a href="#/teams" data-nav="teams">Teams</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="app" class="wrap" aria-live="polite">
+    <div class="loading"><span class="spinner" aria-hidden="true"></span> Loading Lions games…</div>
+  </main>
+
+  <footer class="wrap site-footer">
+    <span id="updated"></span>
+    <span>Times are Adelaide time. Data from <a id="source-link" href="#" target="_blank" rel="noopener">BasketballConnect</a>.</span>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

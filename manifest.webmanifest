@@ -1,0 +1,13 @@
+{
+  "name": "Lions Results",
+  "short_name": "Lions",
+  "description": "Central Districts Lions results, fixtures and live scores",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F3F5F9",
+  "theme_color": "#163A80",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
