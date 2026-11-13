@@ -277,3 +277,31 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 .swipe-dots button { width: 28px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; position: relative; }
 .swipe-dots button::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--line); transition: width .2s, margin .2s; }
 .swipe-dots button.on::after { width: 20px; margin-left: -10px; border-radius: 4px; background: var(--blue); }
+
+/* Sortable stat tables */
+table.sortable thead th { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+table.sortable thead th:hover { color: var(--ink); }
+table.sortable thead th[aria-sort="ascending"], table.sortable thead th[aria-sort="descending"] { color: var(--blue); }
+table.sortable thead th[aria-sort="descending"]::after { content: " \25BE"; }
+table.sortable thead th[aria-sort="ascending"]::after { content: " \25B4"; }
+
+/* Game flow card (design A: chips, labelled worm, quarter strip) */
+.flow-card { padding-bottom: 0 !important; }
+.flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 16px 16px 4px; }
+.flow-head h3 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--navy); }
+.flow-head .meta { font-size: 14px; color: var(--muted); }
+.flow-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px 2px; }
+.flow-chips span { background: var(--tint); color: var(--navy); font-weight: 700; font-size: 14px; padding: 6px 11px; border-radius: 999px; }
+.flow-side { padding: 8px 16px 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.flow-side.down { padding: 0 16px 10px; }
+.flow-card .worm { margin: 0 auto; padding: 0 12px; max-width: 640px; }
+.worm .wval { font-size: 30px; font-weight: 700; fill: var(--ink); font-family: var(--body); }
+.worm .wdot { stroke-width: 4; }
+.worm .wline { stroke-width: 4; }
+.flow-strip { display: grid; border-top: 1px solid var(--line); }
+.flow-strip .fq { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px 14px; }
+.flow-strip .fq + .fq { border-left: 1px solid var(--line-soft); }
+.flow-strip .fq span { font-size: 13px; color: var(--muted); }
+.flow-strip .fq b { font-family: var(--display); font-size: 24px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.flow-strip .fq.won { background: var(--tint); }
+.flow-strip .fq.lost { background: var(--bg); }
