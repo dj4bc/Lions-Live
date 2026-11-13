@@ -408,10 +408,10 @@
   const num = (x) => { const n = parseFloat(x); return isNaN(n) ? 0 : n; };
   function statsUrl(q) {
     const mock = new URLSearchParams(location.search).get('mock');
-    if (mock) return 'stats-' + (q.matchId ? 'm' + q.matchId : 't' + q.teamId) + '.json';
+    if (mock) return 'stats-' + (q.matchId ? 'm' + q.matchId : 't' + q.teamId) + (q.period ? '-p' + q.period : '') + '.json';
     return CFG.apiBase + '/livescores/stats/public/v2/scoringByPlayer?competitionId=' + q.comp +
       '&aggregate=ALL&search=&sportRefId=2&userId=&period=&offset=' + (q.teamId ? '0' : '') + '&limit=' + (q.teamId ? '100' : '') +
-      '&matchId=' + (q.matchId || '') + (q.teamId ? '&teamId=' + q.teamId : '');
+      '&matchId=' + (q.matchId || '') + (q.teamId ? '&teamId=' + q.teamId : '') + (q.period ? '&period=' + q.period : '');
   }
   async function getStats(key, q, maxAgeMs) {
     const c = statsCache.get(key);
@@ -460,10 +460,67 @@
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div></section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
+        '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Game flow</h3><span class="meta">Score margin by quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '<section class="box-grid" data-game-stats="' + g.id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading box score…</div></section>');
   }
 
+
+  /* ---------- game flow ("worm") ---------- */
+  // BasketballConnect's public stats can be filtered by period, which gives each team's points per quarter.
+  // The worm plots our lead at the end of each quarter.
+  async function hydrateWorm(el) {
+    const id = parseInt(el.dataset.worm, 10);
+    const g = DATA.games.find((x) => x.id === id);
+    const v = view(g);
+    if (!v.them) { el.remove(); return; }
+    let per;
+    try {
+      const age = g.status === 'live' ? 25e3 : 6e5;
+      per = await Promise.all([1, 2, 3, 4, 5].map((p) => getStats('m' + id + 'p' + p, { matchId: id, comp: g.comp.id, period: p }, age)));
+    } catch (e) { if (el.isConnected) el.remove(); return; }
+    if (!el.isConnected) return;
+    const pts = (rows, t) => rows.filter((r) => r.teamId === t.id).reduce((a, r) => a + r.pts, 0);
+    let q = per.map((rows) => ({ us: pts(rows, v.us), them: pts(rows, v.them) }));
+    let last = 0; q.forEach((x, i) => { if (x.us || x.them) last = i; });
+    if (!q.some((x) => x.us || x.them)) { el.remove(); return; }
+    q = q.slice(0, Math.max(last + 1, g.status === 'live' ? last + 1 : Math.min(4, q.length)));
+    const label = (i) => (i >= 4 ? 'OT' : 'Q' + (i + 1));
+    let cu = 0, ct = 0;
+    const pts2 = [{ x: 0, m: 0, us: 0, them: 0, lab: 'Start' }].concat(q.map((x, i) => { cu += x.us; ct += x.them; return { x: i + 1, m: cu - ct, us: cu, them: ct, lab: label(i) }; }));
+    const W = 600, H = 220, L = 48, R = 20, T = 18, B = 34;
+    const n = pts2.length - 1;
+    const maxAbs = Math.max(4, ...pts2.map((p) => Math.abs(p.m)));
+    const X = (x) => L + (x / n) * (W - L - R);
+    const Y = (m) => T + (1 - (m + maxAbs) / (2 * maxAbs)) * (H - T - B);
+    const line = pts2.map((p, i) => (i ? 'L' : 'M') + X(p.x).toFixed(1) + ' ' + Y(p.m).toFixed(1)).join(' ');
+    const area = line + ' L' + X(n) + ' ' + Y(0) + ' L' + X(0) + ' ' + Y(0) + ' Z';
+    const usName = v.us.short, themName = v.them.ours ? v.them.short : v.them.club;
+    const tip = (p) => p.lab + ': ' + usName + ' ' + p.us + ' – ' + p.them + ' ' + themName + (p.m ? ' (' + (p.m > 0 ? '+' : '') + p.m + ')' : ' (level)');
+    const fin = pts2[n];
+    const svg = '<svg class="worm" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc('Score margin by quarter. ' + pts2.slice(1).map(tip).join('. ')) + '">' +
+      '<defs><clipPath id="wa' + id + '"><rect x="0" y="0" width="' + W + '" height="' + Y(0) + '"></rect></clipPath><clipPath id="wb' + id + '"><rect x="0" y="' + Y(0) + '" width="' + W + '" height="' + (H - Y(0)) + '"></rect></clipPath></defs>' +
+      pts2.slice(1).map((p) => '<line class="wgrid" x1="' + X(p.x) + '" x2="' + X(p.x) + '" y1="' + T + '" y2="' + (H - B) + '"></line>').join('') +
+      '<path class="warea us" clip-path="url(#wa' + id + ')" d="' + area + '"></path><path class="warea them" clip-path="url(#wb' + id + ')" d="' + area + '"></path>' +
+      '<line class="wzero" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"></line>' +
+      '<path class="wline" d="' + line + '"></path>' +
+      pts2.map((p) => '<g class="wpt"><circle class="whit" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="16"></circle><circle class="wdot" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="4.5"></circle><title>' + esc(tip(p)) + '</title></g>').join('') +
+      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(maxAbs) + 4) + '" text-anchor="end">+' + maxAbs + '</text>' +
+      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(0) + 4) + '" text-anchor="end">0</text>' +
+      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(-maxAbs) + 4) + '" text-anchor="end">−' + maxAbs + '</text>' +
+      pts2.slice(1).map((p) => '<text class="wlab" x="' + X(p.x) + '" y="' + (H - 8) + '" text-anchor="middle">' + p.lab + '</text>').join('') +
+      '</svg>';
+    const legend = '<div class="worm-legend"><span><i class="us"></i>' + esc(usName) + ' ahead</span><span><i class="them"></i>' + esc(themName) + ' ahead</span>' +
+      '<b>' + (fin.m > 0 ? esc(usName) + ' by ' + fin.m : fin.m < 0 ? esc(themName) + ' by ' + (-fin.m) : 'Level') + (g.status === 'live' ? ' so far' : '') + '</b></div>';
+    const table = '<div class="table-wrap"><table class="box qtable"><thead><tr><th>Team</th>' + q.map((x, i) => '<th class="num">' + label(i) + '</th>').join('') + '<th class="num">T</th></tr></thead><tbody>' +
+      '<tr><td>' + esc(usName) + '</td>' + q.map((x) => '<td class="num">' + x.us + '</td>').join('') + '<td class="num strong">' + fin.us + '</td></tr>' +
+      '<tr><td>' + esc(themName) + '</td>' + q.map((x) => '<td class="num">' + x.them + '</td>').join('') + '<td class="num strong">' + fin.them + '</td></tr></tbody></table></div>';
+    el.innerHTML = '<div class="card-head"><h3>Game flow</h3><span class="meta">Margin at the end of each quarter</span></div>' + legend + svg + table +
+      ((fin.us !== (v.su || 0) || fin.them !== (v.sth || 0)) && g.status === 'final' ? '<p class="fine">Quarter scores come from player stats, which don\'t quite add up to the final score for this game.</p>' : '');
+  }
+
   async function hydrateStats() {
+    const wormEl = app.querySelector('[data-worm]');
+    if (wormEl) hydrateWorm(wormEl);
     const gameEl = app.querySelector('[data-game-stats]');
     if (gameEl) {
       const id = parseInt(gameEl.dataset.gameStats, 10);
