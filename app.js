@@ -386,7 +386,7 @@
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const j = await res.json();
     const rows = (Array.isArray(j) ? j : (j.result || [])).map((r) => ({
-      teamId: r.teamId,
+      teamId: Number(r.teamId),
       shirt: r.shirt == null ? '' : String(r.shirt),
       hidden: !!r.isHidden,
       name: r.isHidden ? '' : [r.firstName, r.lastName].filter(Boolean).join(' '),
@@ -410,7 +410,7 @@
     return '<article class="card' + (isLions ? ' mine' : '') + '"><div class="card-head"><h3>' + esc(title) + '</h3><span class="meta">' + tot.pts + ' pts</span></div>' +
       '<div class="table-wrap"><table class="box"><thead><tr><th class="num">#</th><th>Player</th><th class="num">PTS</th><th class="num">FT</th><th class="num">2P</th><th class="num">3P</th><th class="num">PF</th>' + (extra ? '<th class="num">TF</th><th class="num">UF</th>' : '') + '</tr></thead><tbody>' +
       (rows.length ? rows.map((p) => '<tr' + (p.pf >= 5 ? ' class="fouled-out"' : '') + '>' + playerCell(p) + '<td class="num strong">' + p.pts + '</td><td class="num">' + p.ft + '</td><td class="num">' + p.p2 + '</td><td class="num">' + p.p3 + '</td><td class="num' + (p.pf >= 4 ? ' warn' : '') + '">' + p.pf + '</td>' + (extra ? '<td class="num">' + p.tf + '</td><td class="num">' + p.uf + '</td>' : '') + '</tr>').join('')
-        : '<tr><td colspan="' + (extra ? 9 : 7) + '" class="empty">No player stats recorded yet.</td></tr>') +
+        : '<tr><td colspan="' + (extra ? 9 : 7) + '" class="empty">No player stats recorded for this team yet. Some games only get stats entered after the final siren, or not at all.</td></tr>') +
       '</tbody>' + (rows.length ? '<tfoot><tr><td></td><td>Team</td><td class="num strong">' + tot.pts + '</td><td class="num">' + tot.ft + '</td><td class="num">' + tot.p2 + '</td><td class="num">' + tot.p3 + '</td><td class="num">' + tot.pf + '</td>' + (extra ? '<td class="num">' + tot.tf + '</td><td class="num">' + tot.uf + '</td>' : '') + '</tr></tfoot>' : '') +
       '</table></div></article>';
   }
