@@ -50,6 +50,8 @@ window.LIONS_CONFIG = {
   },
   // Where the live foul tracker's data lives (the Linode scraper). Leave empty to hide the fouls card.
   foulsBase: 'https://fouls.adamforb.es',
+  // Game alerts (web push) service on the Linode. Leave empty to hide the alerts switch.
+  pushBase: 'https://fouls.adamforb.es/push',
   timeZone: 'Australia/Adelaide',
   // How often to refresh while any Lions game is live (milliseconds).
   liveRefreshMs: 60000

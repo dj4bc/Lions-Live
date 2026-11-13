@@ -210,7 +210,7 @@
 
     const mine = myTeamIds().filter((id) => DATA.teams.has(id)).map((id) => DATA.teams.get(id)).sort(teamSort);
     if (mine.length) {
-      html += '<section><h2 class="section-title">' + (mine.length > 1 ? 'My teams' : 'My team') + '</h2><div class="grid">' + mine.map((t) => {
+      html += '<section><h2 class="section-title">' + (mine.length > 1 ? 'My teams' : 'My team') + '</h2>' + alertsBar() + '<div class="grid">' + mine.map((t) => {
         const tg = teamGames(t.id);
         const next = tg.find((g) => g.status !== 'final' && !g.postponed);
         const last = tg.filter((g) => g.status === 'final').pop();
@@ -622,6 +622,62 @@
     }
   }
 
+  /* ---------- game alerts (web push) ---------- */
+  const STORE_ALERTS = 'lions.alerts';
+  const PUSH = (CFG.pushBase || '').replace(/\/$/, '');
+  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  if (PUSH && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  const alertsOn = () => store.get(STORE_ALERTS) === '1' && pushSupported() && Notification.permission === 'granted';
+  function alertTeams() {
+    return myTeamIds().filter((id) => DATA.teams.has(id)).map((id) => { const t = DATA.teams.get(id); return { id, label: groupName(t) + ' ' + t.short }; });
+  }
+  function b64ToBytes(s) {
+    const pad = '='.repeat((4 - (s.length % 4)) % 4);
+    const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  }
+  const postJSON = (path, body) => fetch(PUSH + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  async function syncAlerts(sub) {
+    if (!PUSH || !pushSupported()) return;
+    const reg = await navigator.serviceWorker.ready;
+    sub = sub || await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await postJSON('/subscribe', { site: location.origin, subscription: sub.toJSON(), teams: alertTeams() });
+  }
+  async function enableAlerts() {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error(perm === 'denied' ? 'Notifications are blocked for this site in your browser settings.' : 'Permission was not given.');
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { publicKey } = await fetch(PUSH + '/key').then((r) => r.json());
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+    }
+    await syncAlerts(sub);
+    store.set(STORE_ALERTS, '1');
+    postJSON('/test', { endpoint: sub.endpoint }).catch(() => {});
+  }
+  async function disableAlerts() {
+    store.set(STORE_ALERTS, null);
+    try {
+      const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+      if (sub) { postJSON('/unsubscribe', { endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); }
+    } catch (e) { /* ignore */ }
+  }
+  function alertsBar() {
+    if (!PUSH || !myTeamIds().length) return '';
+    const bell = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>';
+    if (isIOS() && !isStandalone()) {
+      return '<div class="alerts-bar">' + bell + '<span>Want a ping when your teams start and finish? On iPhone, add ' + esc(SITE_NAME) + ' to your home screen first, then turn alerts on from there.</span><button type="button" data-install>Show me how</button></div>';
+    }
+    if (!pushSupported()) return '';
+    const on = alertsOn();
+    return '<div class="alerts-bar' + (on ? ' on' : '') + '">' + bell + '<span>' + (on ? 'Alerts are on. You\'ll get a ping when your teams start and when they finish.' : 'Get a ping when your teams start and when they finish.') + '</span>' +
+      '<button type="button" data-alerts="' + (on ? 'off' : 'on') + '">' + (on ? 'Turn off' : 'Turn on alerts') + '</button></div>';
+  }
+
   /* ---------- sponsors ---------- */
   const SP = CFG.sponsors || {};
   const sponsor = (k) => (k && SP.list && SP.list[k]) || null;
@@ -770,8 +826,6 @@
   const SITE_NAME = 'Lions Den';
   const STORE_A2HS = 'lions.a2hsLater';
   let installPrompt = null;
-  const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isAndroid = () => /Android/i.test(navigator.userAgent);
   function installBanner() {
     if (isStandalone()) return '';
@@ -840,11 +894,19 @@
     if (b.dataset.round != null) { location.hash = '#/results/' + b.dataset.round; return; }
     if (b.dataset.age != null) { ui.age = b.dataset.age; route(); return; }
     if (b.dataset.sex != null) { ui.sex = b.dataset.sex; route(); return; }
+    if (b.dataset.alerts != null) {
+      b.disabled = true;
+      (b.dataset.alerts === 'on' ? enableAlerts() : disableAlerts())
+        .then(() => route())
+        .catch((err) => { b.disabled = false; const s = b.parentElement.querySelector('span'); if (s) s.textContent = 'Couldn\'t turn alerts on: ' + err.message; });
+      return;
+    }
     if (b.dataset.star != null) {
       const id = parseInt(b.dataset.star, 10);
       const ids = myTeamIds();
       const nextIds = ids.includes(id) ? ids.filter((v) => v !== id) : ids.concat(id);
       store.set(STORE_MY_TEAM, nextIds.length ? nextIds.join(',') : null);
+      if (alertsOn()) syncAlerts().catch(() => {});
       route();
     }
   });
