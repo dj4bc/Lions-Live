@@ -32,7 +32,6 @@ window.LIONS_CONFIG = {
   ],
   clubMatch: 'Central Districts Lions',
   // Sponsors. Logos live in the sponsors/ folder. Remove an entry (or set it to null) to hide that spot.
-  // NOTE: Barossa Mazda and The Injury Hub are demo sponsors for now. Swap in the club's real sponsors.
   sponsors: {
     list: {
       mazda: { name: 'Barossa Mazda', logo: 'sponsors/barossa-mazda.png', url: 'https://www.barossamazda.com.au/', dark: true },
