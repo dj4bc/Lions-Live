@@ -687,7 +687,7 @@
       const rows = (players[side] || []).filter((p) => p.fouls > 0).sort((a, b) => b.fouls - a.fouls || num(a.no) - num(b.no));
       return '<div class="fl-team"><h4>' + esc(name) + '</h4>' + (rows.length ? rows.map((p) => {
         const st = p.fouls >= 5 ? 'out' : p.fouls === 4 ? 'warn' : '';
-        return '<div class="fl-row ' + st + '"><span class="fl-no">' + esc(p.no) + '</span><span class="fl-name">' + esc(p.player || '') + '</span>' +
+        return '<div class="fl-row ' + st + '"><span class="fl-no">' + esc(p.no) + '</span><span class="fl-name">' + esc(/^hidden player$/i.test(p.player || '') ? 'Player #' + p.no : (p.player || '')) + '</span>' +
           pips(Math.min(p.fouls, 5), 5) + '<span class="fl-tag">' + (st === 'out' ? 'Out' : st === 'warn' ? 'On 4' : p.fouls) + '</span></div>';
       }).join('') : '<div class="fl-none">No fouls yet</div>') + '</div>';
     };
