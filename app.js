@@ -270,10 +270,7 @@
       '<div class="stat"><span class="stat-label">Draws · club derbies</span><span class="stat-value">' + count('D') + ' · ' + count('CD') + '</span></div>' +
       '<div class="stat feature"><span class="stat-label">Biggest win</span><span class="stat-value">' + (best ? esc(groupName(best.us) + ' ' + best.us.short + ' · +' + (best.su - best.sth)) : '–') + '</span></div></section>';
 
-    html += '<div class="chips" role="group" aria-label="Filter">' +
-      ['All'].concat(ages).map((a) => '<button class="chip" type="button" data-age="' + esc(a) + '" aria-pressed="' + (ui.age === a) + '">' + (a === 'All' ? 'All ages' : esc(a)) + '</button>').join('') +
-      '<span class="chip-gap"></span>' +
-      ['All', 'Boys', 'Girls'].map((s) => '<button class="chip" type="button" data-sex="' + s + '" aria-pressed="' + (ui.sex === s) + '">' + (s === 'All' ? 'Boys + Girls' : s) + '</button>').join('') + '</div>';
+    html += filterChips(ages);
 
     const groups = new Map();
     games.slice().sort((a, b) => teamSort(view(a).us, view(b).us)).forEach((g) => {
@@ -302,12 +299,21 @@
     return { vs, done, W, L, D, pf, pa, avg: done.length ? Math.round((pf - pa) / done.length) : 0 };
   }
 
+  function filterChips(ages) {
+    return '<div class="chips" role="group" aria-label="Filter">' +
+      ['All'].concat(ages).map((a) => '<button class="chip" type="button" data-age="' + esc(a) + '" aria-pressed="' + (ui.age === a) + '">' + (a === 'All' ? 'All ages' : esc(a)) + '</button>').join('') +
+      '<span class="chip-gap"></span>' +
+      ['All', 'Boys', 'Girls'].map((s) => '<button class="chip" type="button" data-sex="' + s + '" aria-pressed="' + (ui.sex === s) + '">' + (s === 'All' ? 'Boys + Girls' : s) + '</button>').join('') + '</div>';
+  }
+
   function pageTeams() {
-    const teams = Array.from(DATA.teams.values()).sort(teamSort);
+    const allTeams = Array.from(DATA.teams.values()).sort(teamSort);
+    const ages = Array.from(new Set(allTeams.map((t) => t.age))).sort((a, b) => ageNum(a) - ageNum(b));
+    const teams = allTeams.filter((t) => (ui.age === 'All' || t.age === ui.age) && (ui.sex === 'All' || t.sex === ui.sex));
     const groups = new Map();
     teams.forEach((t) => { const k = groupName(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
     const mine = myTeamId();
-    let html = '<div class="page-head"><div><div class="eyebrow">' + esc(CFG.seasonLabel) + '</div><h1 class="page-title">Teams</h1><div class="page-sub">' + teams.length + ' Lions teams. Tap a team, then star it to pin it to Game day.</div></div></div><section class="grid">';
+    let html = '<div class="page-head"><div><div class="eyebrow">' + esc(CFG.seasonLabel) + '</div><h1 class="page-title">Teams</h1><div class="page-sub">' + allTeams.length + ' Lions teams. Tap a team, then star it to pin it to Game day.</div></div></div>' + filterChips(ages) + (teams.length ? '' : '<div class="notice">No teams match these filters.</div>') + '<section class="grid">';
     groups.forEach((list, name) => {
       html += '<article class="card"><div class="card-head"><h2>' + esc(name) + '</h2><span class="meta">' + list.length + ' teams</span></div>' +
         list.map((t) => {
