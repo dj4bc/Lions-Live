@@ -39,15 +39,19 @@
 
   function parseTeam(t) {
     if (!t || !t.name || /^bye$/i.test(t.name.trim())) return null;
-    const m = t.name.match(/^U(\d+)([BG])\s+(.*)$/);
-    const rest = m ? m[3] : t.name;
+    const nm = t.name.trim();
+    // "U16B ..." juniors, "U21M ..." / "U23W ..." YDL, "SM ..." / "SW ..." seniors and "RM ..." / "RW ..." reserves.
+    const m = nm.match(/^(U\d+|S|R)([BGMW])\s+(.*)$/);
+    const rest = (m ? m[3] : nm).trim();
     const lions = isLions(t.name);
     const num = lions ? (rest.match(/(\d+)\s*$/) || [])[1] : null;
     return {
       id: t.id,
-      name: t.name,
-      age: m ? 'U' + m[1] : '',
-      sex: m ? (m[2] === 'B' ? 'Boys' : 'Girls') : '',
+      name: nm,
+      age: m ? (m[1] === 'S' ? 'Senior' : m[1] === 'R' ? 'Reserves' : m[1]) : '',
+      tile: m ? (m[1] === 'S' ? 'SNR' : m[1] === 'R' ? 'RES' : m[1]) : '',
+      sex: m ? { B: 'Boys', G: 'Girls', M: 'Men', W: 'Women' }[m[2]] : '',
+      gender: m ? (/[BM]/.test(m[2]) ? 'Boys' : 'Girls') : '', // filter key: male or female
       club: rest,
       short: lions ? 'Lions' + (num ? ' ' + num : '') : rest,
       logo: lions ? 'shield.png' : (/^https:\/\//.test(t.logoUrl || '') ? t.logoUrl : ''),
@@ -66,15 +70,16 @@
   function shortDivision(name) {
     if (!name) return '';
     const parts = name.split('|').map((s) => s.trim()).filter(Boolean);
-    if (/^U\d+/.test(parts[0])) parts.shift();
+    if (parts.length > 1 && /^(U\d+|Senior)\b/.test(parts[0])) parts.shift();
     return parts.filter((p) => !/^grading season$/i.test(p)).map((p) => p.replace(/^Division /, 'Div ')).join(' · ');
   }
 
-  function normalise(json) {
+  function normalise(sets) {
     const games = [];
-    (json.rounds || []).forEach((rd) => {
+    sets.forEach(({ comp, json }) => (json.rounds || []).forEach((rd) => {
       (rd.matches || []).forEach((m) => {
         const t1 = parseTeam(m.team1), t2 = parseTeam(m.team2);
+        [t1, t2].forEach((t) => { if (t) t.comp = comp; });
         if (!((t1 && t1.lions) || (t2 && t2.lions))) return;
         const st = (m.matchStatus || '').toUpperCase();
         const vc = m.venueCourt || {}, v = vc.venue || {};
@@ -83,9 +88,11 @@
           round: rd.name || ('Round ' + ((rd.sequence || 0) + 1)),
           roundSeq: rd.sequence != null ? rd.sequence : 0,
           division: (rd.division && rd.division.name) || '',
-          divisionShort: shortDivision(rd.division && rd.division.name),
+          divisionShort: [comp.label === 'Juniors' ? '' : comp.label, shortDivision(rd.division && rd.division.name)].filter(Boolean).join(' · '),
           start: new Date(m.startTime),
-          status: st === 'ENDED' ? 'final' : (st ? 'live' : 'upcoming'),
+          comp,
+          postponed: /POSTPONED|CANCEL|ABANDON/.test(st),
+          status: st === 'ENDED' ? 'final' : (st && !/POSTPONED|CANCEL|ABANDON/.test(st) ? 'live' : 'upcoming'),
           t1, t2,
           s1: m.team1Score, s2: m.team2Score,
           r1: m.team1ResultId, r2: m.team2ResultId,
@@ -97,7 +104,7 @@
           finals: !!m.isFinals, finalsAlias: m.finalsAlias || ''
         });
       });
-    });
+    }));
     games.sort((a, b) => a.start - b.start);
 
     const teams = new Map();
@@ -133,8 +140,8 @@
   }
 
   const groupName = (t) => (t.age + ' ' + t.sex).trim();
-  const ageNum = (a) => parseInt(String(a).replace(/\D/g, ''), 10) || 0;
-  const teamSort = (a, b) => ageNum(a.age) - ageNum(b.age) || a.sex.localeCompare(b.sex) || a.short.localeCompare(b.short, undefined, { numeric: true });
+  const ageNum = (a) => (a === 'Senior' ? 90 : a === 'Reserves' ? 91 : parseInt(String(a).replace(/\D/g, ''), 10) || 0);
+  const teamSort = (a, b) => ageNum(a.age) - ageNum(b.age) || a.gender.localeCompare(b.gender) || a.short.localeCompare(b.short, undefined, { numeric: true });
 
   const BADGE_TEXT = { W: 'W', L: 'L', D: 'D', CD: 'CD', NR: 'N/R', BYE: 'BYE', LIVE: 'LIVE' };
   const BADGE_LABEL = { W: 'Win', L: 'Loss', D: 'Draw', CD: 'Club derby', NR: 'No result', BYE: 'Bye', LIVE: 'Live' };
@@ -162,6 +169,7 @@
     if (g.status !== 'upcoming' || opts.showDate) sub.push(g.status === 'upcoming' ? fDay.format(g.start) : whenShort(g.start));
     let right = '';
     if (g.bye) right = badge('BYE');
+    else if (g.postponed) right = '<span class="when">Postponed</span>';
     else if (g.status === 'upcoming') right = '<span class="when">' + esc(opts.showDate ? time(g.start) : dayLabel(g.start) + '<br>' + time(g.start)).replace('&lt;br&gt;', '<br>') + '</span>';
     else right = '<span class="score">' + esc(v.su) + '–' + esc(v.sth) + '</span>' + badge(v.res);
     const href = (!g.bye && g.status !== 'upcoming') ? '#/game/' + g.id : '#/team/' + v.us.id;
@@ -185,7 +193,7 @@
   function teamGames(id) { return DATA.games.filter((g) => (g.t1 && g.t1.id === id) || (g.t2 && g.t2.id === id)); }
 
   /* ---------- pages ---------- */
-  function filterMatch(t) { return !!t && t.lions && (ui.age === 'All' || t.age === ui.age) && (ui.sex === 'All' || t.sex === ui.sex); }
+  function filterMatch(t) { return !!t && t.lions && (ui.age === 'All' || t.age === ui.age) && (ui.sex === 'All' || t.gender === ui.sex); }
   function gameMatches(g) { return filterMatch(g.t1) || filterMatch(g.t2); }
 
   function pageHome() {
@@ -194,7 +202,7 @@
     const games = DATA.games.filter(gameMatches);
     const live = games.filter((g) => g.status === 'live');
     const horizon = now + 8 * 864e5;
-    const upcoming = games.filter((g) => g.status === 'upcoming' && !g.bye && g.start.getTime() > now - 3 * 3600e3 && g.start.getTime() < horizon);
+    const upcoming = games.filter((g) => g.status === 'upcoming' && !g.bye && !g.postponed && g.start.getTime() > now - 3 * 3600e3 && g.start.getTime() < horizon);
     const recent = games.filter((g) => g.status === 'final' && !g.bye && g.start.getTime() > now - 2 * 864e5).reverse();
     let html = '';
 
@@ -202,7 +210,7 @@
     if (mine.length) {
       html += '<section><h2 class="section-title">' + (mine.length > 1 ? 'My teams' : 'My team') + '</h2><div class="grid">' + mine.map((t) => {
         const tg = teamGames(t.id);
-        const next = tg.find((g) => g.status !== 'final');
+        const next = tg.find((g) => g.status !== 'final' && !g.postponed);
         const last = tg.filter((g) => g.status === 'final').pop();
         return '<div class="card mine"><div class="card-head"><h3>' + esc(groupName(t) + ' ' + t.short) + '</h3><a class="meta" href="#/team/' + t.id + '">Team page</a></div>' +
           (next ? gameRow(next, { teamId: t.id, showDivision: false }) : '<div class="empty">No more games scheduled.</div>') +
@@ -235,7 +243,7 @@
           html += '<section><div class="slot-head"><h3>' + esc(t) + '</h3><span>' + games.length + (games.length === 1 ? ' game' : ' games') + '</span></div><div class="card">' +
             games.map((g) => {
               const v = view(g);
-              return '<a class="row" href="#/team/' + v.us.id + '">' + logo(v.them, 30) + '<div class="age-tile"><b>' + esc(v.us.age) + '</b><span>' + esc(v.us.sex.toUpperCase()) + '</span></div>' +
+              return '<a class="row" href="#/team/' + v.us.id + '">' + logo(v.them, 30) + '<div class="age-tile"><b>' + esc(v.us.tile) + '</b><span>' + esc(v.us.sex.toUpperCase()) + '</span></div>' +
                 '<div class="row-main"><span class="row-title">' + esc(v.us.short) + ' <span class="vs">' + esc(opponentText(v)) + '</span></span>' +
                 '<span class="row-sub">' + esc(g.venueShort + ' · ' + g.court) + '</span></div></a>';
             }).join('') + '</div></section>';
@@ -258,7 +266,7 @@
     const round = rounds.find((r) => r.seq === seq);
     const games = round.games.filter((g) => {
       const v = view(g);
-      return (ui.age === 'All' || v.us.age === ui.age) && (ui.sex === 'All' || v.us.sex === ui.sex);
+      return (ui.age === 'All' || v.us.age === ui.age) && (ui.sex === 'All' || v.us.gender === ui.sex);
     });
     const views = games.map((g) => view(g));
     const count = (r) => views.filter((v) => v.res === r).length;
@@ -307,16 +315,17 @@
   }
 
   function filterChips(ages) {
+    const adults = Array.from(DATA.teams.values()).some((t) => t.sex === 'Men' || t.sex === 'Women');
     return '<div class="chips" role="group" aria-label="Filter">' +
       ['All'].concat(ages).map((a) => '<button class="chip" type="button" data-age="' + esc(a) + '" aria-pressed="' + (ui.age === a) + '">' + (a === 'All' ? 'All ages' : esc(a)) + '</button>').join('') +
       '<span class="chip-gap"></span>' +
-      ['All', 'Boys', 'Girls'].map((s) => '<button class="chip" type="button" data-sex="' + s + '" aria-pressed="' + (ui.sex === s) + '">' + (s === 'All' ? 'Boys + Girls' : s) + '</button>').join('') + '</div>';
+      ['All', 'Boys', 'Girls'].map((s) => '<button class="chip" type="button" data-sex="' + s + '" aria-pressed="' + (ui.sex === s) + '">' + (s === 'All' ? (adults ? 'Everyone' : 'Boys + Girls') : adults ? (s === 'Boys' ? 'Boys + Men' : 'Girls + Women') : s) + '</button>').join('') + '</div>';
   }
 
   function pageTeams() {
     const allTeams = Array.from(DATA.teams.values()).sort(teamSort);
     const ages = Array.from(new Set(allTeams.map((t) => t.age))).sort((a, b) => ageNum(a) - ageNum(b));
-    const teams = allTeams.filter((t) => (ui.age === 'All' || t.age === ui.age) && (ui.sex === 'All' || t.sex === ui.sex));
+    const teams = allTeams.filter((t) => (ui.age === 'All' || t.age === ui.age) && (ui.sex === 'All' || t.gender === ui.sex));
     const groups = new Map();
     teams.forEach((t) => { const k = groupName(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
     const mine = myTeamIds();
@@ -397,7 +406,7 @@
   function statsUrl(q) {
     const mock = new URLSearchParams(location.search).get('mock');
     if (mock) return 'stats-' + (q.matchId ? 'm' + q.matchId : 't' + q.teamId) + '.json';
-    return CFG.apiBase + '/livescores/stats/public/v2/scoringByPlayer?competitionId=' + CFG.competitionId +
+    return CFG.apiBase + '/livescores/stats/public/v2/scoringByPlayer?competitionId=' + q.comp +
       '&aggregate=ALL&search=&sportRefId=2&userId=&period=&offset=' + (q.teamId ? '0' : '') + '&limit=' + (q.teamId ? '100' : '') +
       '&matchId=' + (q.matchId || '') + (q.teamId ? '&teamId=' + q.teamId : '');
   }
@@ -458,7 +467,7 @@
       const g = DATA.games.find((x) => x.id === id);
       const v = view(g);
       try {
-        const rows = await getStats('m' + id, { matchId: id }, g.status === 'live' ? 25e3 : 6e5);
+        const rows = await getStats('m' + id, { matchId: id, comp: g.comp.id }, g.status === 'live' ? 25e3 : 6e5);
         if (!gameEl.isConnected) return;
         const sides = [v.us, v.them].filter(Boolean);
         gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions, t)).join('') +
@@ -472,7 +481,7 @@
     if (teamEl) {
       const id = parseInt(teamEl.dataset.teamStats, 10);
       try {
-        const rows = (await getStats('t' + id, { teamId: id }, 5 * 6e4)).filter((p) => p.teamId === id).sort((a, b) => b.pts - a.pts || num(a.shirt) - num(b.shirt));
+        const rows = (await getStats('t' + id, { teamId: id, comp: DATA.teams.get(id).comp.id }, 5 * 6e4)).filter((p) => p.teamId === id).sort((a, b) => b.pts - a.pts || num(a.shirt) - num(b.shirt));
         if (!teamEl.isConnected) return;
         teamEl.innerHTML = rows.length ? '<div class="table-wrap"><table class="box"><thead><tr><th class="num">#</th><th>Player</th><th class="num">GP</th><th class="num">PTS</th><th class="num">AVG</th><th class="num opt">FT</th><th class="num opt">2P</th><th class="num opt">3P</th><th class="num">PF</th></tr></thead><tbody>' +
           rows.map((p) => '<tr>' + playerCell(p) + '<td class="num">' + p.games + '</td><td class="num strong">' + p.pts + '</td><td class="num">' + p.avg.toFixed(1) + '</td><td class="num opt">' + p.ft + '</td><td class="num opt">' + p.p2 + '</td><td class="num opt">' + p.p3 + '</td><td class="num">' + p.pf + '</td></tr>').join('') +
@@ -518,35 +527,44 @@
   window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
 
   /* ---------- data ---------- */
-  function dataUrl() {
+  function dataUrl(comp, i) {
     const mock = new URLSearchParams(location.search).get('mock');
-    if (mock && /^[\w.-]+\.json$/.test(mock)) return mock;
-    return CFG.apiBase + '/livescores/round/matches?competitionId=' + CFG.competitionId +
-      '&divisionId=&teamIds=[' + CFG.teamIds.join(',') + ']&ignoreStatuses=[1]';
+    if (mock && /^[\w.-]+\.json$/.test(mock)) return i === 0 ? mock : mock.replace(/\.json$/, '-' + comp.id + '.json');
+    return CFG.apiBase + '/livescores/round/matches?competitionId=' + comp.id +
+      '&divisionId=&teamIds=[' + comp.teamIds.join(',') + ']&ignoreStatuses=[1]';
+  }
+  // Every competition loads in parallel. One that fails is skipped, unless they all fail.
+  async function fetchAll() {
+    const results = await Promise.allSettled(CFG.competitions.map(async (comp, i) => {
+      const res = await fetch(dataUrl(comp, i), { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return { comp, json: await res.json() };
+    }));
+    const ok = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+    if (!ok.length) throw results[0].reason;
+    return ok;
   }
 
   async function load(silent) {
     try {
-      const res = await fetch(dataUrl(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      DATA = normalise(await res.json());
+      DATA = normalise(await fetchAll());
       document.getElementById('updated').textContent = 'Updated ' + time(DATA.fetchedAt);
       const y = window.scrollY;
       route();
       if (silent) window.scrollTo(0, y);
     } catch (err) {
       if (!DATA) {
-        app.innerHTML = '<div class="notice"><h2>Couldn\'t load the latest games</h2><p>BasketballConnect didn\'t respond (' + esc(err.message) + '). Try again in a minute, or check the <a href="' + esc(CFG.sourceUrl) + '" target="_blank" rel="noopener">official fixture</a>.</p><button class="chip" type="button" onclick="location.reload()">Try again</button></div>';
+        app.innerHTML = '<div class="notice"><h2>Couldn\'t load the latest games</h2><p>BasketballConnect didn\'t respond (' + esc(err.message) + '). Try again in a minute, or check the <a href="' + esc(CFG.competitions[0].sourceUrl) + '" target="_blank" rel="noopener">official fixture</a>.</p><button class="chip" type="button" onclick="location.reload()">Try again</button></div>';
       }
     }
     clearTimeout(refreshTimer);
     const anyLive = DATA && DATA.games.some((g) => g.status === 'live');
-    const soon = DATA && DATA.games.some((g) => g.status === 'upcoming' && Math.abs(g.start - Date.now()) < 3600e3);
+    const soon = DATA && DATA.games.some((g) => g.status === 'upcoming' && !g.postponed && Math.abs(g.start - Date.now()) < 3600e3);
     refreshTimer = setTimeout(() => { if (!document.hidden) load(true); else refreshTimer = null; }, anyLive || soon ? CFG.liveRefreshMs : 10 * 60e3);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !refreshTimer) load(true); });
 
   document.getElementById('season-label').textContent = 'Central Districts Basketball · ' + CFG.seasonLabel;
-  document.getElementById('source-link').href = CFG.sourceUrl;
+  document.getElementById('source-link').href = CFG.competitions[0].sourceUrl;
   load(false);
 })();
