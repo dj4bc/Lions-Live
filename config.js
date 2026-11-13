@@ -3,7 +3,7 @@
 // browser's developer tools (Network tab), and look for the
 // "round/matches?competitionId=" request.
 window.LIONS_CONFIG = {
-  seasonLabel: '2026/27 junior season',
+  seasonLabel: '2026/27 Junior Season',
   apiBase: 'https://api-basketball.squadi.com',
   competitionId: 2890, // numeric id used by the matches endpoint
   // Every Lions team in this competition. Team names must contain clubMatch.
