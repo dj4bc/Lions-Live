@@ -266,3 +266,4 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 .worm-card .worm { padding: 0 8px; box-sizing: border-box; }
 .worm { max-width: 640px; margin-left: auto; margin-right: auto; }
 [data-flow] { padding-bottom: 8px; }
+.qtable td:first-child { font-weight: 600; }
