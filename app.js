@@ -4,6 +4,8 @@
   'use strict';
 
   const CFG = window.LIONS_CONFIG;
+  // An older cached config.js has one competition at the top level.
+  if (!CFG.competitions) CFG.competitions = [{ id: CFG.competitionId, label: 'Juniors', teamIds: CFG.teamIds, sourceUrl: CFG.sourceUrl }];
   const app = document.getElementById('app');
   const TZ = CFG.timeZone;
   const STORE_MY_TEAM = 'lions.myTeam';
