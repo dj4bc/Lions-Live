@@ -461,7 +461,7 @@
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div></section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
         '<div class="swipe"><div class="swipe-track">' +
-        '<section class="card worm-card" data-flow="' + g.id + '"><div class="card-head"><h3>Game flow</h3><span class="meta">Margin at the end of each quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
+        '<section class="card worm-card flow-card" data-flow="' + g.id + '"><div class="flow-head"><h3>Game flow</h3></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '</div><div class="swipe-dots" role="tablist"><button type="button" class="on" aria-label="Game flow"></button><button type="button" aria-label="Quarter by quarter"></button></div></div>' +
         '<section class="box-grid" data-game-stats="' + g.id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading box score…</div></section>');
@@ -528,36 +528,47 @@
 
   // The worm plots our lead at the end of each quarter.
   function renderFlow(el, g, v, q, label, usName, themName) {
-    const id = g.id;
+    const id = g.id, live = g.status === 'live';
     let cu = 0, ct = 0;
     const pts2 = [{ x: 0, m: 0, us: 0, them: 0, lab: 'Start' }].concat(q.map((x, i) => { cu += x.us; ct += x.them; return { x: i + 1, m: cu - ct, us: cu, them: ct, lab: label(i) }; }));
-    const W = 600, H = 220, L = 48, R = 20, T = 18, B = 34;
-    const n = pts2.length - 1;
-    const maxAbs = Math.max(4, ...pts2.map((p) => Math.abs(p.m)));
+    const n = pts2.length - 1, fin = pts2[n];
+    const W = 600, L = 16, R = 16, T = 52, B = 56;
+    let top = Math.max(0, ...pts2.map((p) => p.m)), bot = Math.min(0, ...pts2.map((p) => p.m));
+    if (top === bot) { top = 1; bot = -1; }
+    const H = T + B + Math.min(150, Math.max(60, (top - bot) * 14));
     const X = (x) => L + (x / n) * (W - L - R);
-    const Y = (m) => T + (1 - (m + maxAbs) / (2 * maxAbs)) * (H - T - B);
+    const Y = (m) => T + ((top - m) / (top - bot)) * (H - T - B);
     const line = pts2.map((p, i) => (i ? 'L' : 'M') + X(p.x).toFixed(1) + ' ' + Y(p.m).toFixed(1)).join(' ');
     const area = line + ' L' + X(n) + ' ' + Y(0) + ' L' + X(0) + ' ' + Y(0) + ' Z';
-    const tip = (p) => p.lab + ': ' + usName + ' ' + p.us + ' – ' + p.them + ' ' + themName + (p.m ? ' (' + (p.m > 0 ? '+' : '') + p.m + ')' : ' (level)');
-    const fin = pts2[n];
+    const sgn = (m) => (m > 0 ? '+' + m : m < 0 ? '−' + (-m) : '0');
+    const tip = (p) => p.lab + ': ' + usName + ' ' + p.us + ' – ' + p.them + ' ' + themName + (p.m ? ' (' + sgn(p.m) + ')' : ' (level)');
     const svg = '<svg class="worm" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc('Score margin by quarter. ' + pts2.slice(1).map(tip).join('. ')) + '">' +
       '<defs><clipPath id="wa' + id + '"><rect x="0" y="0" width="' + W + '" height="' + Y(0) + '"></rect></clipPath><clipPath id="wb' + id + '"><rect x="0" y="' + Y(0) + '" width="' + W + '" height="' + (H - Y(0)) + '"></rect></clipPath></defs>' +
-      pts2.slice(1).map((p) => '<line class="wgrid" x1="' + X(p.x) + '" x2="' + X(p.x) + '" y1="' + T + '" y2="' + (H - B) + '"></line>').join('') +
       '<path class="warea us" clip-path="url(#wa' + id + ')" d="' + area + '"></path><path class="warea them" clip-path="url(#wb' + id + ')" d="' + area + '"></path>' +
       '<line class="wzero" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"></line>' +
       '<path class="wline" d="' + line + '"></path>' +
-      pts2.map((p) => '<g class="wpt"><circle class="whit" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="16"></circle><circle class="wdot" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="4.5"></circle><title>' + esc(tip(p)) + '</title></g>').join('') +
-      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(maxAbs) + 4) + '" text-anchor="end">+' + maxAbs + '</text>' +
-      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(0) + 4) + '" text-anchor="end">0</text>' +
-      '<text class="wlab" x="' + (L - 8) + '" y="' + (Y(-maxAbs) + 4) + '" text-anchor="end">−' + maxAbs + '</text>' +
-      pts2.slice(1).map((p) => '<text class="wlab" x="' + X(p.x) + '" y="' + (H - 8) + '" text-anchor="middle">' + p.lab + '</text>').join('') +
+      pts2.map((p) => '<g class="wpt"><circle class="whit" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="24"></circle><circle class="wdot" cx="' + X(p.x) + '" cy="' + Y(p.m) + '" r="10"></circle>' +
+        (p.x ? '<text class="wval" x="' + X(p.x) + '" y="' + (p.m < 0 ? Y(p.m) + 46 : Y(p.m) - 22) + '" text-anchor="' + (p.x === n ? 'end' : 'middle') + '"' + (p.x === n ? ' dx="10"' : '') + '>' + sgn(p.m) + '</text>' : '') +
+        '<title>' + esc(tip(p)) + '</title></g>').join('') +
       '</svg>';
-    const legend = '<div class="worm-legend"><span><i class="us"></i>' + esc(usName) + ' ahead</span><span><i class="them"></i>' + esc(themName) + ' ahead</span>' +
-      '<b>' + (fin.m > 0 ? esc(usName) + ' by ' + fin.m : fin.m < 0 ? esc(themName) + ' by ' + (-fin.m) : 'Level') + (g.status === 'live' ? ' so far' : '') + '</b></div>';
-    const table = '<div class="table-wrap"><table class="box qtable"><thead><tr><th>Team</th>' + q.map((x, i) => '<th class="num">' + label(i) + '</th>').join('') + '<th class="num">T</th></tr></thead><tbody>' +
-      '<tr><td>' + esc(usName) + '</td>' + q.map((x) => '<td class="num">' + x.us + '</td>').join('') + '<td class="num strong">' + fin.us + '</td></tr>' +
-      '<tr><td>' + esc(themName) + '</td>' + q.map((x) => '<td class="num">' + x.them + '</td>').join('') + '<td class="num strong">' + fin.them + '</td></tr></tbody></table></div>';
-    el.innerHTML = '<div class="card-head"><h3>Game flow</h3><span class="meta">Margin at the end of each quarter</span></div>' + legend + svg + table;
+    // Headline chips
+    const ms = pts2.slice(1).map((p) => p.m);
+    const lo = Math.min(0, ...ms), hi = Math.max(0, ...ms);
+    const chips = [];
+    if (lo < 0) chips.push('Biggest deficit ' + sgn(lo));
+    if (hi > 0) chips.push('Biggest lead ' + sgn(hi));
+    let bq = -1; q.forEach((x, i) => { if (x.us > x.them && (bq < 0 || x.us - x.them > q[bq].us - q[bq].them)) bq = i; });
+    if (bq >= 0) chips.push('Won ' + label(bq) + ' by ' + (q[bq].us - q[bq].them));
+    if (!live && lo < 0 && fin.m > 0) chips.push('Came back to win');
+    else if (!live && lo < 0 && fin.m === 0) chips.push('Came back to draw');
+    else if (ms.every((m) => m > 0)) chips.push('Led all game');
+    const meta = live ? (fin.m > 0 ? 'Up by ' + fin.m : fin.m < 0 ? 'Down by ' + (-fin.m) : 'Level') + ' so far'
+      : fin.m > 0 ? 'Won by ' + fin.m : fin.m < 0 ? 'Lost by ' + (-fin.m) : 'Level at full time';
+    const strip = '<div class="flow-strip" style="grid-template-columns:repeat(' + q.length + ',1fr)">' + q.map((x, i) =>
+      '<div class="fq ' + (x.us > x.them ? 'won' : x.us < x.them ? 'lost' : 'drew') + '"><span>' + label(i) + '</span><b>' + x.us + '–' + x.them + '</b></div>').join('') + '</div>';
+    el.innerHTML = '<div class="flow-head"><h3>Game flow</h3><span class="meta">' + esc(meta) + '</span></div>' +
+      (chips.length ? '<div class="flow-chips">' + chips.map((c) => '<span>' + esc(c) + '</span>').join('') + '</div>' : '') +
+      '<div class="flow-side up">' + esc(usName) + ' ahead ↑</div>' + svg + '<div class="flow-side down">' + esc(themName) + ' ahead ↓</div>' + strip;
   }
 
   async function hydrateStats() {
