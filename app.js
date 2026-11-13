@@ -587,7 +587,9 @@
       const g = DATA.games.find((x) => x.id === id);
       const v = view(g);
       try {
-        const rows = await getStats('m' + id, { matchId: id, comp: g.comp.id }, g.status === 'live' ? 25e3 : 6e5);
+        let rows = await getStats('m' + id, { matchId: id, comp: g.comp.id }, g.status === 'live' ? 25e3 : 6e5);
+        let fromLog = false;
+        if (!rows.length && CFG.foulsBase) { const lr = await logRows(g); if (lr.length) { rows = lr; fromLog = true; } }
         if (!gameEl.isConnected) return;
         if (!rows.length) {
           gameEl.innerHTML = '<div class="notice stats-wait">' + (g.status === 'live'
@@ -596,7 +598,7 @@
         } else {
         const sides = [v.us, v.them].filter(Boolean);
         gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions, t)).join('') +
-          '<p class="fine">FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
+          '<p class="fine">' + (fromLog ? 'Live from BasketballConnect\'s action log, updated every 45 seconds. ' : '') + 'FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
         applySorts(gameEl);
         }
       } catch (e) {
@@ -650,6 +652,26 @@
   function matchCentreUrl(g) {
     const m = /competitionUniqueKey=([\w-]+)/.exec((g.comp && g.comp.sourceUrl) || '');
     return m ? 'https://registration.basketballconnect.com/matchSummary?matchId=' + g.id + '&competitionId=' + g.comp.id + '&competitionUniqueKey=' + m[1] : '';
+  }
+
+  // Player rows built from the scraper's action-log file, used while BasketballConnect's stats feed is still empty.
+  async function logRows(g) {
+    try {
+      const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + g.id + '.json', { cache: 'no-store' });
+      if (!res.ok) return [];
+      const d = await res.json();
+      const out = [];
+      [['team1', g.t1], ['team2', g.t2]].forEach(([side, team]) => {
+        if (!team) return;
+        ((d.players || {})[side] || []).forEach((p) => {
+          if (p.pts == null) return; // older files only carry fouls
+          const hidden = /^hidden player$/i.test(p.player || '');
+          out.push({ teamId: team.id, shirt: String(p.no || ''), name: hidden ? '' : (p.player || ''), hidden,
+            pts: num(p.pts), ft: num(p.ft), p2: num(p.p2), p3: num(p.p3), pf: num(p.fouls), tf: 0, uf: 0 });
+        });
+      });
+      return out;
+    } catch (e) { return []; }
   }
 
   /* ---------- live fouls (from the action log, via the club's scraper) ---------- */
