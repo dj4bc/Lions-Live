@@ -585,10 +585,16 @@
       try {
         const rows = await getStats('m' + id, { matchId: id, comp: g.comp.id }, g.status === 'live' ? 25e3 : 6e5);
         if (!gameEl.isConnected) return;
+        if (!rows.length) {
+          gameEl.innerHTML = '<div class="notice stats-wait">' + (g.status === 'live'
+            ? '<h3>Player stats arrive at full time</h3><p>BasketballConnect only publishes points, fouls and shooting for each player once the game ends. The score above is live, and this page fills in the box score by itself when the final siren goes.</p>'
+            : '<h3>No player stats for this game</h3><p>Stats sometimes get entered a while after the final siren, or not at all. Check back later.</p>') + '</div>';
+        } else {
         const sides = [v.us, v.them].filter(Boolean);
         gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions, t)).join('') +
           '<p class="fine">FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
         applySorts(gameEl);
+        }
       } catch (e) {
         if (gameEl.isConnected) gameEl.innerHTML = '<div class="notice">Couldn\'t load the box score (' + esc(e.message) + '). It may not be recorded for this game.</div>';
       }

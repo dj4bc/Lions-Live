@@ -328,3 +328,9 @@ table.sortable thead th[aria-sort="ascending"]::after { content: " \25B4"; }
 .sp-team { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; }
 .sp-team span { font-size: 12px; line-height: 1.3; color: var(--head-sub); }
 .sp-team .sp-logo { width: 104px; height: 46px; margin-left: auto; border: 0; }
+
+/* Long messages inside stat tables wrap instead of pushing the columns off screen */
+table.box td.empty { white-space: normal; }
+.stats-wait h3 { margin: 0 0 6px; font-family: var(--display); font-size: 22px; color: var(--navy); }
+.stats-wait p { margin: 0; color: var(--muted); }
+.box-grid .stats-wait { grid-column: 1 / -1; }
