@@ -464,6 +464,7 @@
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
       (g.status !== 'upcoming' && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
+        (CFG.foulsBase ? '<section class="card fouls-card" data-fouls="' + g.id + '" hidden></section>' : '') +
         '<div class="swipe"><div class="swipe-track">' +
         '<section class="card worm-card flow-card" data-flow="' + g.id + '"><div class="flow-head"><h3>Game flow</h3></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
@@ -576,6 +577,8 @@
   }
 
   async function hydrateStats() {
+    const foulsEl = app.querySelector('[data-fouls]');
+    if (foulsEl) hydrateFouls(foulsEl);
     const wormEl = app.querySelector('[data-worm]');
     if (wormEl) hydrateWorm(wormEl);
     const gameEl = app.querySelector('[data-game-stats]');
@@ -647,6 +650,53 @@
   function matchCentreUrl(g) {
     const m = /competitionUniqueKey=([\w-]+)/.exec((g.comp && g.comp.sourceUrl) || '');
     return m ? 'https://registration.basketballconnect.com/matchSummary?matchId=' + g.id + '&competitionId=' + g.comp.id + '&competitionUniqueKey=' + m[1] : '';
+  }
+
+  /* ---------- live fouls (from the action log, via the club's scraper) ---------- */
+  // The scraper reads BasketballConnect's public match page and publishes <foulsBase>/match-<id>.json:
+  // { updatedAt, status, quarter, players: { team1: [{ no, player, fouls }], team2: [...] }, teamFouls: { team1: [q1..], team2: [q1..] } }
+  // team1 is the first-listed (home) team, the same as g.t1.
+  async function hydrateFouls(el) {
+    const id = parseInt(el.dataset.fouls, 10);
+    const g = DATA.games.find((x) => x.id === id);
+    if (!g || !CFG.foulsBase) return;
+    let d;
+    try {
+      const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + id + '.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      d = await res.json();
+    } catch (e) { d = null; }
+    if (!el.isConnected) return;
+    if (d) renderFouls(el, d, g, view(g));
+    if (g.status === 'live') { clearTimeout(hydrateFouls.t); hydrateFouls.t = setTimeout(() => { if (el.isConnected && !document.hidden) hydrateFouls(el); }, 30e3); }
+  }
+  function renderFouls(el, d, g, v) {
+    const ourSide = v.home ? 'team1' : 'team2', theirSide = v.home ? 'team2' : 'team1';
+    const players = d.players || {}, tf = d.teamFouls || {};
+    const q = d.quarter || Math.max(1, (tf.team1 || []).length, (tf.team2 || []).length);
+    const qLabel = q > 4 ? 'OT' : 'Q' + q;
+    const usName = v.us.short, themName = v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
+    const pips = (n, max, cls) => '<span class="fpips' + (cls ? ' ' + cls : '') + '">' + Array.from({ length: max }, (_, i) => '<i' + (i < n ? ' class="on"' : '') + '></i>').join('') + '</span>';
+    const teamBox = (side, name) => {
+      const n = (tf[side] || [])[q - 1] || 0;
+      const pen = n >= 4;
+      return '<div class="ft-team' + (pen ? ' pen' : '') + '"><span class="ft-name">' + esc(name) + '</span>' + pips(Math.min(n, 4), 4) +
+        '<b>' + n + '</b><span class="ft-note">' + (pen ? 'In the penalty: fouls now give free throws' : (4 - n) + ' to the penalty') + '</span></div>';
+    };
+    const list = (side, name, mine) => {
+      const rows = (players[side] || []).filter((p) => p.fouls > 0).sort((a, b) => b.fouls - a.fouls || num(a.no) - num(b.no));
+      return '<div class="fl-team"><h4>' + esc(name) + '</h4>' + (rows.length ? rows.map((p) => {
+        const st = p.fouls >= 5 ? 'out' : p.fouls === 4 ? 'warn' : '';
+        return '<div class="fl-row ' + st + '"><span class="fl-no">' + esc(p.no) + '</span><span class="fl-name">' + esc(p.player || '') + '</span>' +
+          pips(Math.min(p.fouls, 5), 5) + '<span class="fl-tag">' + (st === 'out' ? 'Out' : st === 'warn' ? 'On 4' : p.fouls) + '</span></div>';
+      }).join('') : '<div class="fl-none">No fouls yet</div>') + '</div>';
+    };
+    const upd = d.updatedAt ? time(new Date(d.updatedAt)) : '';
+    el.hidden = false;
+    el.innerHTML = '<div class="card-head"><h3>' + (g.status === 'live' ? '<span class="alog-dot"></span>Live fouls' : 'Fouls') + '</h3><span class="meta">' + esc((g.status === 'live' ? qLabel + ' · ' : '') + (upd ? 'updated ' + upd : '')) + '</span></div>' +
+      (g.status === 'live' ? '<div class="ft-grid">' + teamBox(ourSide, usName) + teamBox(theirSide, themName) + '</div>' : '') +
+      '<div class="fl-grid">' + list(ourSide, usName, true) + list(theirSide, themName, false) + '</div>' +
+      '<p class="fine">From BasketballConnect\'s live action log. Team fouls reset each quarter.</p>';
   }
 
   /* ---------- sortable stat tables ---------- */

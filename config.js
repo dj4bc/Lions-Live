@@ -48,6 +48,8 @@ window.LIONS_CONFIG = {
       'U14 Boys Lions 1': 'injuryhub'
     }
   },
+  // Where the live foul tracker's data lives (the Linode scraper). Leave empty to hide the fouls card.
+  foulsBase: '',
   timeZone: 'Australia/Adelaide',
   // How often to refresh while any Lions game is live (milliseconds).
   liveRefreshMs: 60000

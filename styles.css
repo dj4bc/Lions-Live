@@ -339,3 +339,37 @@ table.box td.empty { white-space: normal; }
 .alog-btn { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; margin-top: 4px; padding: 10px 14px; min-height: 44px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 600; font-size: 14px; text-decoration: none; }
 .alog-btn:hover { background: rgba(255,255,255,0.2); }
 .alog-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff5a4f; box-shadow: 0 0 0 3px rgba(255,90,79,0.3); }
+
+/* Live fouls card */
+.fouls-card .card-head h3 { display: flex; align-items: center; gap: 8px; }
+.fpips { display: inline-flex; gap: 3px; }
+.fpips i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.fpips i.on { background: var(--blue); }
+.ft-grid { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+.ft-team { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; padding: 12px 16px; }
+.ft-team + .ft-team { border-left: 1px solid var(--line-soft); }
+.ft-team .ft-name { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--muted); }
+.ft-team b { font-family: var(--display); font-size: 28px; line-height: 1; color: var(--ink); }
+.ft-team .ft-note { grid-column: 1 / -1; font-size: 12px; color: var(--muted-2); }
+.ft-team.pen { background: #FDECEA; }
+.ft-team.pen .fpips i.on { background: #C62828; }
+.ft-team.pen .ft-note { color: #B3261E; font-weight: 600; }
+.fl-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.fl-team { padding: 10px 0 6px; min-width: 0; }
+.fl-team + .fl-team { border-left: 1px solid var(--line-soft); }
+.fl-team h4 { margin: 0 16px 6px; font-size: 13px; color: var(--muted); }
+.fl-row { display: grid; grid-template-columns: 30px auto minmax(0, 1fr); grid-template-areas: "no name name" "no pips tag"; align-items: center; gap: 2px 8px; padding: 7px 16px; border-top: 1px solid var(--line-soft); }
+.fl-no { grid-area: no; font-family: var(--display); font-weight: 700; font-size: 20px; color: var(--muted); text-align: right; }
+.fl-name { grid-area: name; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl-row .fpips { grid-area: pips; }
+.fl-tag { grid-area: tag; font-size: 12px; font-weight: 700; color: var(--muted); }
+.fl-row.warn { background: #FFF5DB; }
+.fl-row.warn .fl-tag { color: #8A5A00; }
+.fl-row.warn .fpips i.on { background: #E0A100; }
+.fl-row.out { background: #FDECEA; }
+.fl-row.out .fl-name { text-decoration: line-through; color: var(--muted); }
+.fl-row.out .fl-tag { color: #B3261E; }
+.fl-row.out .fpips i.on { background: #C62828; }
+.fl-none { padding: 8px 16px; font-size: 13px; color: var(--muted-2); }
+.fouls-card .fine { margin: 0; padding: 8px 16px 12px; font-size: 12px; color: var(--muted-2); border-top: 1px solid var(--line-soft); }
+.fl-tag { white-space: nowrap; }
