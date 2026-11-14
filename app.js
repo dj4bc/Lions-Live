@@ -103,7 +103,8 @@
           venueShort: v.shortName || v.name || '',
           court: vc.name || '',
           lat: vc.lat || v.lat, lng: vc.lng || v.lng,
-          finals: !!m.isFinals, finalsAlias: m.finalsAlias || ''
+          finals: !!m.isFinals, finalsAlias: m.finalsAlias || '',
+          divisionId: m.divisionId || null
         });
       });
     }));
@@ -382,6 +383,7 @@
           '<a class="btn' + (live ? ' secondary' : '') + '" href="' + mapsUrl(next) + '" target="_blank" rel="noopener">Directions</a>') +
         '</div></section>';
     }
+    html += '<section data-ladder-wrap><h2 class="section-title">Ladder</h2><div class="card ladder-card" data-ladder="' + id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading ladder…</div></div></section>';
     html += '</div><div style="display:flex;flex-direction:column;gap:20px">';
 
     html += '<section><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 class="section-title">Results</h2><span class="form" aria-label="Last five results">' +
@@ -577,7 +579,51 @@
       '<div class="flow-side up">' + esc(usName) + ' ahead ↑</div>' + svg + '<div class="flow-side down">' + esc(themName) + ' ahead ↓</div>' + strip;
   }
 
+  /* ---------- ladder ---------- */
+  // BasketballConnect's public ladder for the team's division (one division per request).
+  const compKey = (comp) => comp.key || ((comp.sourceUrl || '').match(/competitionUniqueKey=([\w-]+)/) || [])[1] || '';
+  const ladderCache = new Map();
+  async function getLadder(comp, divId) {
+    const hit = ladderCache.get(divId);
+    if (hit && Date.now() - hit.at < 60e3) return hit.data;
+    const mock = new URLSearchParams(location.search).get('mock');
+    const url = mock ? 'ladder-' + divId + '.json' : CFG.apiBase + '/livescores/teams/ladder/v2?divisionIds=' + divId + '&competitionKey=' + compKey(comp) + '&filteredOutCompStatuses=1&showForm=1&sportRefId=2';
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    ladderCache.set(divId, { at: Date.now(), data });
+    return data;
+  }
+  async function hydrateLadder(el) {
+    const id = parseInt(el.dataset.ladder, 10);
+    const wrap = el.closest('[data-ladder-wrap]');
+    const drop = () => { if (wrap) wrap.remove(); else el.remove(); };
+    const g = teamGames(id).slice().reverse().find((x) => x.divisionId && !x.bye) || teamGames(id).find((x) => x.divisionId);
+    if (!g || !compKey(g.comp)) { drop(); return; }
+    let d;
+    try { d = await getLadder(g.comp, g.divisionId); } catch (e) { if (el.isConnected) drop(); return; }
+    if (!el.isConnected) return;
+    const rows = (d.ladders || []).filter((r) => !r.isHidden).sort((a, b) => (a.rk || 99) - (b.rk || 99));
+    if (!rows.some((r) => r.id === id)) { drop(); return; }
+    const form = new Map((d.lastResults || []).map((x) => [x.teamId, (x.last5 || []).map((y) => y.code).reverse().slice(-3)]));
+    const hasD = rows.some((r) => num(r.D) > 0);
+    const dot = (c) => '<i class="ld-f ' + (c === 'WON' ? 'w' : c === 'LOST' ? 'l' : 'd') + '" title="' + (c === 'WON' ? 'Win' : c === 'LOST' ? 'Loss' : 'Draw') + '"></i>';
+    const head = wrap && wrap.querySelector('.section-title');
+    if (head) head.textContent = 'Ladder · ' + (rows[0].divisionName || g.division || '');
+    el.innerHTML = '<table class="ladder"><thead><tr><th class="ld-pos">#</th><th class="ld-team">Team</th><th>P</th><th>W</th><th>L</th>' + (hasD ? '<th>D</th>' : '') + '<th>%</th><th class="ld-pts">Pts</th></tr></thead><tbody>' +
+      rows.map((r, i) => {
+        const cls = r.id === id ? 'me' : isLions(r.name || '') ? 'club' : '';
+        const f = form.get(r.id) || [];
+        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td class="ld-pos">' + (r.rk || i + 1) + '</td><td class="ld-team"><span class="ld-name">' + esc(r.name) + '</span>' + (f.length ? '<span class="ld-form" aria-label="Last results">' + f.map(dot).join('') + '</span>' : '') + '</td>' +
+          '<td>' + num(r.P) + '</td><td>' + num(r.W) + '</td><td>' + num(r.L) + '</td>' + (hasD ? '<td>' + num(r.D) + '</td>' : '') +
+          '<td>' + Math.round(num(r.goalAverage)) + '</td><td class="ld-pts">' + num(r.PTS) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="fine">% is points for divided by points against. Dots show each team\'s last 3 results, newest on the right. From BasketballConnect.</p>';
+  }
+
   async function hydrateStats() {
+    const ladderEl = app.querySelector('[data-ladder]');
+    if (ladderEl) hydrateLadder(ladderEl);
     const foulsEl = app.querySelector('[data-fouls]');
     if (foulsEl) hydrateFouls(foulsEl);
     const wormEl = app.querySelector('[data-worm]');
