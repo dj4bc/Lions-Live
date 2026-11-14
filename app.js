@@ -461,8 +461,9 @@
     const status = g.status === 'live' ? '<span class="tag">LIVE</span>' : g.status === 'final' ? '<span class="tag quiet">FINAL</span>' : '<span class="tag quiet">' + esc(dayLabel(g.start).toUpperCase() + ' ' + time(g.start)) + '</span>';
     return '<p style="margin:0"><a href="#/team/' + v.us.id + '">← ' + esc(groupName(v.us) + ' ' + v.us.short) + '</a></p>' +
       '<section class="game-hero"><div class="next-top">' + status + '<span class="game-meta">' + esc(g.round + ' · ' + fDay.format(g.start) + ' · ' + time(g.start)) + '</span></div>' +
-      '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs">' + esc(g.status === 'upcoming' ? '–' : v.su ?? 0) + '</span>' +
-      '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
+      '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs" data-gs="us">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'us')) + '</span>' +
+      '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp" data-gs="them">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'them')) + '</span></div>' +
+      (g.status === 'live' && CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
       (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '"' + (g.status === 'live' ? '' : ' hidden') + '></div>' : '') +
       (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
@@ -802,6 +803,114 @@
     } catch (e) { return []; }
   }
 
+  /* ---------- score moments: animate each new basket on the live score box ---------- */
+  // Each scraper read gives the running score after every scoring play (flow) and each player's points.
+  // Flow entries added since the last read are the new baskets, in order. The scorer is the player on
+  // that side whose points went up by the same amount. A few baskets in one read play one after the
+  // other; four or more show as one summary line instead of a long replay.
+  const seen = new Map(); // game id -> { n, s: [t1, t2], shown: [t1, t2], pts, q }
+  const BALL = '<svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="12" fill="#E8822A" stroke="#7A3B0C" stroke-width="1.5"/><path d="M1 13h24M13 1v24M4.5 4.5c5 4 5 13 0 17M21.5 4.5c-5 4-5 13 0 17" fill="none" stroke="#7A3B0C" stroke-width="1.3"/></svg>';
+  const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const themShort = (v) => v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
+  const shortName = (n) => { const w = String(n).trim().split(/\s+/); return w.length > 1 ? w[0] + ' ' + w[w.length - 1][0] : w[0]; };
+  // The score box shows the newer of BasketballConnect's score and the scraper's, so it never steps back.
+  function shownScore(g, v, who) {
+    const api = who === 'us' ? (v.su ?? 0) : (v.sth ?? 0);
+    const st = seen.get(g.id);
+    if (!st || g.status !== 'live') return api;
+    return Math.max(num(api), st.shown[(who === 'us') === !!v.home ? 0 : 1]);
+  }
+  function setShown(g, v) {
+    ['us', 'them'].forEach((who) => {
+      const el = app.querySelector('.game-hero [data-gs="' + who + '"]');
+      if (el && el.firstChild) el.firstChild.nodeValue = shownScore(g, v, who);
+    });
+  }
+  function scoreMoments(g, d) {
+    const v = view(g);
+    const flow = (d.flow || []).filter((f) => Array.isArray(f) && f.length >= 3);
+    const pts = {};
+    ['team1', 'team2'].forEach((side) => ((d.players || {})[side] || []).forEach((p) => { if (p.pts != null) pts[side + '#' + p.no] = { pts: num(p.pts), p }; }));
+    const last = flow.length ? flow[flow.length - 1] : [0, 0, 0];
+    const prev = seen.get(g.id);
+    const t0 = app.querySelector('[data-tick="' + g.id + '"]');
+    // Same read as before (the page re-rendered): leave any replay that is still playing alone.
+    if (prev && flow.length === prev.n && last[1] === prev.s[0] && last[2] === prev.s[1] && t0 && t0.innerHTML) { prev.pts = pts; setShown(g, v); return; }
+    if (prev) clearTimeout(prev.q);
+    const st = { n: flow.length, s: [last[1], last[2]], shown: [last[1], last[2]], pts, q: null };
+    seen.set(g.id, st);
+    const tickEl = () => app.querySelector('[data-tick="' + g.id + '"]');
+    const lineFor = (s) => { const u = v.home ? s[0] : s[1], t = v.home ? s[1] : s[0];
+      return (u > t ? esc(v.us.short) + ' lead ' : u < t ? esc(themShort(v)) + ' lead ' : 'Level at ') + Math.max(u, t) + '–' + Math.min(u, t); };
+    const tick = (html, anim) => { const t = tickEl(); if (!t) return;
+      t.innerHTML = html; if (anim) { t.classList.remove('in'); void t.offsetWidth; t.classList.add('in'); } };
+    // First read, a score correction, or nothing new: show the score with no animation.
+    const fresh = prev && flow.length > prev.n && last[1] >= prev.s[0] && last[2] >= prev.s[1];
+    if (!fresh) {
+      setShown(g, v);
+      const t = tickEl();
+      if (t && (!prev || flow.length !== prev.n || !t.innerHTML)) tick(flow.length ? 'Score: ' + lineFor(st.shown) : 'Waiting for the first basket…');
+      return;
+    }
+    // The new baskets, and who scored them.
+    const gain = {};
+    Object.keys(pts).forEach((k) => { const was = prev.pts[k] ? prev.pts[k].pts : 0; if (pts[k].pts > was) gain[k] = pts[k].pts - was; });
+    const evs = [];
+    let a = [prev.s[0], prev.s[1]];
+    flow.slice(prev.n).forEach((f) => {
+      const d1 = f[1] - a[0], d2 = f[2] - a[1];
+      a = [f[1], f[2]];
+      const side = d1 > 0 ? 'team1' : d2 > 0 ? 'team2' : null, n = Math.max(d1, d2);
+      if (!side || n > 4) return;
+      const keys = Object.keys(gain).filter((k) => k.startsWith(side + '#') && gain[k] >= n);
+      const k = keys.find((x) => gain[x] === n) || keys[0];
+      let who = null;
+      if (k) {
+        gain[k] -= n; if (!gain[k]) delete gain[k];
+        const p = pts[k].p;
+        who = '#' + p.no + (!p.player || /^hidden player$/i.test(p.player) ? '' : ' ' + shortName(p.player));
+      }
+      evs.push({ side, n, who, mine: (side === 'team1') === !!v.home, after: a.slice() });
+    });
+    if (!evs.length || document.hidden || evs.length >= 4) {
+      setShown(g, v);
+      if (!evs.length) return;
+      const u = evs.filter((e) => e.mine).reduce((x, e) => x + e.n, 0), t = evs.filter((e) => !e.mine).reduce((x, e) => x + e.n, 0);
+      if (!document.hidden) { bump('us', u); bump('them', t); }
+      tick('<b>' + (u >= t ? esc(v.us.short) + ' ' + u + '–' + t : esc(themShort(v)) + ' ' + t + '–' + u) + '</b> since the last update · ' + lineFor(st.shown), true);
+      return;
+    }
+    st.shown = [prev.s[0], prev.s[1]];
+    let i = 0;
+    const step = () => {
+      const e = evs[i++];
+      if (!e || !tickEl()) { st.shown = [last[1], last[2]]; setShown(g, v); return; }
+      st.shown = e.after;
+      setShown(g, v);
+      bump(e.mine ? 'us' : 'them', e.n);
+      const shot = e.n === 3 ? 'a three' : e.n === 2 ? '2' : e.n === 1 ? 'a free throw' : e.n;
+      tick('<b>' + esc(e.who || (e.mine ? v.us.short : themShort(v))) + '</b> ' + (e.who && !e.mine && themShort(v) ? '(' + esc(themShort(v)) + ') ' : '') + 'scores ' + shot + ' · ' + lineFor(e.after), true);
+      if (i < evs.length) st.q = setTimeout(step, reduceMotion() ? 700 : 1600);
+    };
+    step();
+  }
+  // A ball bounces beside the score, a gold ring ripples out and "+2" floats up.
+  function bump(who, n) {
+    const sc = app.querySelector('.game-hero [data-gs="' + who + '"]');
+    if (!sc || !n) return;
+    const f = document.createElement('span'); f.className = 'sm-float'; f.textContent = '+' + n; f.setAttribute('aria-hidden', 'true'); sc.appendChild(f);
+    setTimeout(() => f.remove(), 1400);
+    if (reduceMotion()) return;
+    const hero = sc.closest('.game-hero'), h = hero.getBoundingClientRect(), r = sc.getBoundingClientRect();
+    const rg = document.createRange(); rg.selectNodeContents(sc.firstChild);
+    const x = r.right - h.left - rg.getBoundingClientRect().width - 12, y = r.bottom - h.top - 4;
+    const bb = document.createElement('div'); bb.className = 'sm-ball'; bb.innerHTML = BALL; bb.style.left = (x - 9) + 'px'; bb.style.top = (y - 18) + 'px';
+    const ring = document.createElement('div'); ring.className = 'sm-ring'; ring.style.left = x + 'px'; ring.style.top = y + 'px';
+    hero.append(bb, ring);
+    setTimeout(() => { bb.remove(); ring.remove(); }, 1400);
+  }
+
+
   /* ---------- live fouls (from the action log, via the club's scraper) ---------- */
   // The scraper reads BasketballConnect's public match page and publishes <foulsBase>/match-<id>.json:
   // { updatedAt, status, quarter, players: { team1: [{ no, player, fouls }], team2: [...] }, teamFouls: { team1: [q1..], team2: [q1..] } }
@@ -818,7 +927,7 @@
     } catch (e) { d = null; }
     if (!el.isConnected) return;
     const lw = app.querySelector('[data-lw="' + id + '"]');
-    if (d) { renderFouls(el, d, g, view(g)); if (lw) renderLiveWorm(lw, d, g, view(g)); } else if (lw) lw.hidden = true;
+    if (d) { renderFouls(el, d, g, view(g)); if (lw) renderLiveWorm(lw, d, g, view(g)); if (g.status === 'live') scoreMoments(g, d); } else if (lw) lw.hidden = true;
     if (g.status === 'live') { clearTimeout(hydrateFouls.t); hydrateFouls.t = setTimeout(() => { if (el.isConnected && !document.hidden) hydrateFouls(el); }, 30e3); }
   }
   // Live worm: the scraper's flow is the running score after each scoring play, [[quarter, team1, team2], ...].
@@ -1005,8 +1114,8 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const w = document.querySelector('.a2hs-sheet-wrap'); if (w) w.remove(); } });
 
   /* ---------- routing ---------- */
-  const HYDRATED = '[data-lw], [data-fouls], [data-flow], [data-worm], [data-game-stats], [data-ladder], [data-team-stats]';
-  const hydKey = (el) => ['lw', 'fouls', 'flow', 'worm', 'gameStats', 'ladder', 'teamStats'].map((a) => el.dataset[a] != null ? a + el.dataset[a] : '').join('');
+  const HYDRATED = '[data-tick], [data-lw], [data-fouls], [data-flow], [data-worm], [data-game-stats], [data-ladder], [data-team-stats]';
+  const hydKey = (el) => ['tick', 'lw', 'fouls', 'flow', 'worm', 'gameStats', 'ladder', 'teamStats'].map((a) => el.dataset[a] != null ? a + el.dataset[a] : '').join('');
   function route() {
     if (!DATA) return;
     const h = (location.hash || '#/').replace(/^#/, '');

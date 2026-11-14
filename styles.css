@@ -421,3 +421,20 @@ table.box td.empty { white-space: normal; }
 .box-grid:has(> .loading) { min-height: 420px; }
 .stats-card:has(> .loading) { min-height: 260px; }
 .ladder-card:has(> .loading) { min-height: 220px; }
+/* Score moments: ball bounce, gold ripple, "+2" float and a one-line ticker on the live score box */
+.game-hero { position: relative; isolation: isolate; }
+.game-lines .gs { position: relative; }
+.tick { font-size: 13px; color: #fff; background: rgba(255,255,255,.1); border-radius: 8px; padding: 7px 10px; min-height: 36px; line-height: 18px; box-sizing: content-box; }
+@media (min-width: 600px) { .tick { min-height: 18px; } }
+.tick:empty::before { content: '\00a0'; }
+.tick b { color: #fff; }
+.tick.in { animation: sm-tick .4s ease-out; }
+@keyframes sm-tick { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sm-float { position: absolute; right: -6px; top: -8px; font-family: var(--display); font-weight: 800; font-size: 26px; color: var(--red); opacity: 0; pointer-events: none; animation: sm-float 1.3s ease-out; }
+@keyframes sm-float { 0% { opacity: 0; transform: translateY(10px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-20px); } }
+.sm-ball { position: absolute; width: 18px; height: 18px; pointer-events: none; opacity: 0; animation: sm-bounce 1s cubic-bezier(.3,0,.7,1); z-index: 1; }
+.sm-ball svg { display: block; width: 100%; height: 100%; }
+@keyframes sm-bounce { 0% { opacity: 1; transform: translateY(-40px); } 30% { transform: translateY(0); } 50% { transform: translateY(-18px); } 70% { transform: translateY(0); } 82% { transform: translateY(-6px); } 92% { transform: translateY(0); opacity: 1; } 100% { opacity: 0; } }
+.sm-ring { position: absolute; width: 14px; height: 14px; border: 3px solid var(--red); border-radius: 50%; pointer-events: none; opacity: 0; animation: sm-ring .9s ease-out .3s; }
+@keyframes sm-ring { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(4); } }
+@media (prefers-reduced-motion: reduce) { .sm-float, .tick.in { animation-duration: .01ms; } }
