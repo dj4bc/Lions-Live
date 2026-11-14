@@ -603,7 +603,7 @@
     let d;
     try { d = await getLadder(g.comp, g.divisionId); } catch (e) { if (el.isConnected) drop(); return; }
     if (!el.isConnected) return;
-    const rows = (d.ladders || []).filter((r) => !r.isHidden).sort((a, b) => (a.rk || 99) - (b.rk || 99));
+    const rows = (d.ladders || []).filter((r) => !num(r.isHidden)).sort((a, b) => (num(a.rk) || 99) - (num(b.rk) || 99));
     if (!rows.some((r) => r.id === id)) { drop(); return; }
     const form = new Map((d.lastResults || []).map((x) => [x.teamId, (x.last5 || []).map((y) => y.code).reverse().slice(-3)]));
     const hasD = rows.some((r) => num(r.D) > 0);
