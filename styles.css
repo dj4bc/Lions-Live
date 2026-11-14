@@ -375,12 +375,6 @@ table.box td.empty { white-space: normal; }
 .fl-tag { white-space: nowrap; }
 
 /* Game alerts switch */
-.alerts-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-size: 14px; color: var(--muted); }
-.alerts-bar svg { flex: 0 0 auto; color: var(--blue); }
-.alerts-bar span { flex: 1 1 auto; }
-.alerts-bar button { flex: 0 0 auto; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 0; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
-.alerts-bar.on { background: var(--tint); }
-.alerts-bar.on button { background: transparent; color: var(--blue); border: 1px solid var(--line); }
 
 /* live worm inside the score box */
 .lw { margin: 2px -4px 0; }
@@ -394,3 +388,11 @@ table.box td.empty { white-space: normal; }
 @keyframes lw-pulse { 0% { r: 4; opacity: 1; } 100% { r: 12; opacity: 0; } }
 .lw-pulse { animation: lw-pulse 1.6s ease-out infinite; }
 @media (prefers-reduced-motion: reduce) { .lw-pulse { animation: none; } }
+
+/* per-team alerts bell */
+.card.mine .card-head { align-items: center; }
+.bell { flex: none; width: 40px; height: 40px; margin-left: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.bell.on { background: var(--red); border-color: var(--red); color: var(--accent-ink, #fff); }
+.bell:disabled { opacity: .6; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; z-index: 50; background: var(--navy); color: #fff; border-radius: 12px; padding: 12px 14px; font-size: 14px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.toast svg { flex: none; }
