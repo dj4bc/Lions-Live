@@ -598,7 +598,9 @@
     const id = parseInt(el.dataset.ladder, 10);
     const wrap = el.closest('[data-ladder-wrap]');
     const drop = () => { if (wrap) wrap.remove(); else el.remove(); };
-    const g = teamGames(id).slice().reverse().find((x) => x.divisionId && !x.bye) || teamGames(id).find((x) => x.divisionId);
+    const tgs = teamGames(id).slice().reverse();
+    // Pool games set the ladder; finals and cross-grade games sit in their own divisions.
+    const g = tgs.find((x) => x.divisionId && !x.bye && !x.finals && /^round\s*\d+/i.test(x.round)) || tgs.find((x) => x.divisionId && !x.finals) || tgs.find((x) => x.divisionId);
     if (!g || !compKey(g.comp)) { drop(); return; }
     let d;
     try { d = await getLadder(g.comp, g.divisionId); } catch (e) { if (el.isConnected) drop(); return; }
