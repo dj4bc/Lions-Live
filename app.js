@@ -103,7 +103,8 @@
           venueShort: v.shortName || v.name || '',
           court: vc.name || '',
           lat: vc.lat || v.lat, lng: vc.lng || v.lng,
-          finals: !!m.isFinals, finalsAlias: m.finalsAlias || ''
+          finals: !!m.isFinals, finalsAlias: m.finalsAlias || '',
+          divisionId: m.divisionId || null
         });
       });
     }));
@@ -214,7 +215,7 @@
         const tg = teamGames(t.id);
         const next = tg.find((g) => g.status !== 'final' && !g.postponed);
         const last = tg.filter((g) => g.status === 'final').pop();
-        return '<div class="card mine"><div class="card-head"><h3>' + esc(groupName(t) + ' ' + t.short) + '</h3><a class="meta" href="#/team/' + t.id + '">Team page</a></div>' +
+        return '<div class="card mine"><div class="card-head"><h3>' + esc(groupName(t) + ' ' + t.short) + '</h3><a class="meta" href="#/team/' + t.id + '">Team page</a>' + bellButton(t) + '</div>' +
           (next ? gameRow(next, { teamId: t.id, showDivision: false }) : '<div class="empty">No more games scheduled.</div>') +
           (last ? gameRow(last, { teamId: t.id, showDivision: false }) : '') + '</div>';
       }).join('') + '</div></section>';
@@ -382,6 +383,7 @@
           '<a class="btn' + (live ? ' secondary' : '') + '" href="' + mapsUrl(next) + '" target="_blank" rel="noopener">Directions</a>') +
         '</div></section>';
     }
+    html += '<section data-ladder-wrap><h2 class="section-title">Ladder</h2><div class="card ladder-card" data-ladder="' + id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading ladder…</div></div></section>';
     html += '</div><div style="display:flex;flex-direction:column;gap:20px">';
 
     html += '<section><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 class="section-title">Results</h2><span class="form" aria-label="Last five results">' +
@@ -461,8 +463,11 @@
       '<section class="game-hero"><div class="next-top">' + status + '<span class="game-meta">' + esc(g.round + ' · ' + fDay.format(g.start) + ' · ' + time(g.start)) + '</span></div>' +
       '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs">' + esc(g.status === 'upcoming' ? '–' : v.su ?? 0) + '</span>' +
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
-      '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div></section>' +
+      '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
+      (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '" hidden></div>' : '') +
+      (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
+        (CFG.foulsBase ? '<section class="card fouls-card" data-fouls="' + g.id + '" hidden></section>' : '') +
         '<div class="swipe"><div class="swipe-track">' +
         '<section class="card worm-card flow-card" data-flow="' + g.id + '"><div class="flow-head"><h3>Game flow</h3></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
@@ -574,7 +579,55 @@
       '<div class="flow-side up">' + esc(usName) + ' ahead ↑</div>' + svg + '<div class="flow-side down">' + esc(themName) + ' ahead ↓</div>' + strip;
   }
 
+  /* ---------- ladder ---------- */
+  // BasketballConnect's public ladder for the team's division (one division per request).
+  const compKey = (comp) => comp.key || ((comp.sourceUrl || '').match(/competitionUniqueKey=([\w-]+)/) || [])[1] || '';
+  const ladderCache = new Map();
+  async function getLadder(comp, divId) {
+    const hit = ladderCache.get(divId);
+    if (hit && Date.now() - hit.at < 60e3) return hit.data;
+    const mock = new URLSearchParams(location.search).get('mock');
+    const url = mock ? 'ladder-' + divId + '.json' : CFG.apiBase + '/livescores/teams/ladder/v2?divisionIds=' + divId + '&competitionKey=' + compKey(comp) + '&filteredOutCompStatuses=1&showForm=1&sportRefId=2';
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    ladderCache.set(divId, { at: Date.now(), data });
+    return data;
+  }
+  async function hydrateLadder(el) {
+    const id = parseInt(el.dataset.ladder, 10);
+    const wrap = el.closest('[data-ladder-wrap]');
+    const drop = () => { if (wrap) wrap.remove(); else el.remove(); };
+    const tgs = teamGames(id).slice().reverse();
+    // Pool games set the ladder; finals and cross-grade games sit in their own divisions.
+    const g = tgs.find((x) => x.divisionId && !x.bye && !x.finals && /^round\s*\d+/i.test(x.round)) || tgs.find((x) => x.divisionId && !x.finals) || tgs.find((x) => x.divisionId);
+    if (!g || !compKey(g.comp)) { drop(); return; }
+    let d;
+    try { d = await getLadder(g.comp, g.divisionId); } catch (e) { if (el.isConnected) drop(); return; }
+    if (!el.isConnected) return;
+    const rows = (d.ladders || []).filter((r) => !num(r.isHidden)).sort((a, b) => (num(a.rk) || 99) - (num(b.rk) || 99));
+    if (!rows.some((r) => r.id === id)) { drop(); return; }
+    const form = new Map((d.lastResults || []).map((x) => [x.teamId, (x.last5 || []).map((y) => y.code).reverse().slice(-3)]));
+    const hasD = rows.some((r) => num(r.D) > 0);
+    const dot = (c) => '<i class="ld-f ' + (c === 'WON' ? 'w' : c === 'LOST' ? 'l' : 'd') + '" title="' + (c === 'WON' ? 'Win' : c === 'LOST' ? 'Loss' : 'Draw') + '"></i>';
+    const head = wrap && wrap.querySelector('.section-title');
+    if (head) head.textContent = 'Ladder · ' + (rows[0].divisionName || g.division || '');
+    el.innerHTML = '<table class="ladder"><thead><tr><th class="ld-pos">#</th><th class="ld-team">Team</th><th>P</th><th>W</th><th>L</th>' + (hasD ? '<th>D</th>' : '') + '<th>%</th><th class="ld-pts">Pts</th></tr></thead><tbody>' +
+      rows.map((r, i) => {
+        const cls = r.id === id ? 'me' : isLions(r.name || '') ? 'club' : '';
+        const f = form.get(r.id) || [];
+        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td class="ld-pos">' + (r.rk || i + 1) + '</td><td class="ld-team"><span class="ld-name">' + esc(r.name) + '</span>' + (f.length ? '<span class="ld-form" aria-label="Last results">' + f.map(dot).join('') + '</span>' : '') + '</td>' +
+          '<td>' + num(r.P) + '</td><td>' + num(r.W) + '</td><td>' + num(r.L) + '</td>' + (hasD ? '<td>' + num(r.D) + '</td>' : '') +
+          '<td>' + Math.round(num(r.goalAverage)) + '</td><td class="ld-pts">' + num(r.PTS) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="fine">% is points for divided by points against. Dots show each team\'s last 3 results, newest on the right. From BasketballConnect.</p>';
+  }
+
   async function hydrateStats() {
+    const ladderEl = app.querySelector('[data-ladder]');
+    if (ladderEl) hydrateLadder(ladderEl);
+    const foulsEl = app.querySelector('[data-fouls]');
+    if (foulsEl) hydrateFouls(foulsEl);
     const wormEl = app.querySelector('[data-worm]');
     if (wormEl) hydrateWorm(wormEl);
     const gameEl = app.querySelector('[data-game-stats]');
@@ -583,12 +636,20 @@
       const g = DATA.games.find((x) => x.id === id);
       const v = view(g);
       try {
-        const rows = await getStats('m' + id, { matchId: id, comp: g.comp.id }, g.status === 'live' ? 25e3 : 6e5);
+        let rows = await getStats('m' + id, { matchId: id, comp: g.comp.id }, g.status === 'live' ? 25e3 : 6e5);
+        let fromLog = false;
+        if (!rows.length && CFG.foulsBase) { const lr = await logRows(g); if (lr.length) { rows = lr; fromLog = true; } }
         if (!gameEl.isConnected) return;
+        if (!rows.length) {
+          gameEl.innerHTML = '<div class="notice stats-wait">' + (g.status === 'live'
+            ? '<h3>Player stats arrive at full time</h3><p>BasketballConnect only publishes points, fouls and shooting for each player once the game ends. The score above is live, and this page fills in the box score by itself when the final siren goes.</p>'
+            : '<h3>No player stats for this game</h3><p>Stats sometimes get entered a while after the final siren, or not at all. Check back later.</p>') + '</div>';
+        } else {
         const sides = [v.us, v.them].filter(Boolean);
         gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions, t)).join('') +
-          '<p class="fine">FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
+          '<p class="fine">' + (fromLog ? 'Live from BasketballConnect\'s action log, updated every 45 seconds. ' : '') + 'FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
         applySorts(gameEl);
+        }
       } catch (e) {
         if (gameEl.isConnected) gameEl.innerHTML = '<div class="notice">Couldn\'t load the box score (' + esc(e.message) + '). It may not be recorded for this game.</div>';
       }
@@ -609,6 +670,85 @@
       }
     }
   }
+
+  /* ---------- game alerts (web push) ---------- */
+  const STORE_ALERTS = 'lions.alertTeams'; // team ids with the bell on
+  const PUSH = (CFG.pushBase || '').replace(/\/$/, '');
+  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  if (PUSH && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  const pushReady = () => pushSupported() && Notification.permission === 'granted';
+  const bellIds = () => String(store.get(STORE_ALERTS) || '').split(',').map((v) => parseInt(v, 10)).filter((v) => !isNaN(v));
+  const setBellIds = (ids) => store.set(STORE_ALERTS, ids.length ? ids.join(',') : null);
+  const alertsOn = () => bellIds().length > 0 && pushReady();
+  function alertTeams() {
+    return bellIds().filter((id) => DATA.teams.has(id)).map((id) => { const t = DATA.teams.get(id); return { id, label: groupName(t) + ' ' + t.short }; });
+  }
+  function b64ToBytes(s) {
+    const pad = '='.repeat((4 - (s.length % 4)) % 4);
+    const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  }
+  const postJSON = (path, body) => fetch(PUSH + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  async function syncAlerts(sub) {
+    if (!PUSH || !pushSupported()) return;
+    const reg = await navigator.serviceWorker.ready;
+    sub = sub || await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await postJSON('/subscribe', { site: location.origin, subscription: sub.toJSON(), teams: alertTeams() });
+  }
+  async function enableAlerts() {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error(perm === 'denied' ? 'Notifications are blocked for this site in your browser settings.' : 'Permission was not given.');
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { publicKey } = await fetch(PUSH + '/key').then((r) => r.json());
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+    }
+    return sub;
+  }
+  async function disableAlerts() {
+    try {
+      const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+      if (sub) { postJSON('/unsubscribe', { endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); }
+    } catch (e) { /* ignore */ }
+  }
+  const BELL = (on) => '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="' + (on ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 3.5a6 6 0 0 0-6 6V14l-2 3h16l-2-3V9.5a6 6 0 0 0-6-6Z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M10 20a2 2 0 0 0 4 0"/></svg>';
+  // Round bell on each "My team" card: alerts for that team's game start and final score.
+  function bellButton(t) {
+    if (!PUSH) return '';
+    const name = groupName(t) + ' ' + t.short;
+    if (isIOS() && !isStandalone()) return '<button type="button" class="bell" data-install aria-label="' + esc('Game alerts for ' + name + ': add to home screen first') + '">' + BELL(false) + '</button>';
+    if (!pushSupported()) return '';
+    const on = alertsOn() && bellIds().includes(t.id);
+    return '<button type="button" class="bell' + (on ? ' on' : '') + '" data-bell="' + t.id + '" aria-pressed="' + on + '" aria-label="' + esc('Game alerts for ' + name) + '">' + BELL(on) + '</button>';
+  }
+  function toast(html) {
+    const old = document.querySelector('.toast'); if (old) old.remove();
+    document.body.insertAdjacentHTML('beforeend', '<div class="toast" role="status">' + html + '</div>');
+    const el = document.querySelector('.toast');
+    clearTimeout(toast.t); toast.t = setTimeout(() => el.remove(), 4000);
+  }
+  async function toggleBell(id) {
+    const t = DATA.teams.get(id); const name = t ? groupName(t) + ' ' + t.short : 'this team';
+    const ids = bellIds(); const turnOn = !(alertsOn() && ids.includes(id));
+    if (turnOn) {
+      const firstTime = !alertsOn();
+      const sub = await enableAlerts();
+      setBellIds(ids.filter((v) => v !== id).concat(id));
+      await syncAlerts(sub);
+      if (firstTime) postJSON('/test', { endpoint: sub.endpoint }).catch(() => {});
+      toast(BELL(true) + '<span>Alerts on for ' + esc(name) + ': game start and final score.</span>');
+    } else {
+      const next = ids.filter((v) => v !== id);
+      setBellIds(next);
+      if (next.length) await syncAlerts(); else await disableAlerts();
+      toast(BELL(false) + '<span>Alerts off for ' + esc(name) + '.</span>');
+    }
+  }
+
 
   /* ---------- sponsors ---------- */
   const SP = CFG.sponsors || {};
@@ -634,6 +774,142 @@
   function teamSponsor(t) {
     const s = sponsor(SP.teams && SP.teams[groupName(t) + ' ' + t.short]);
     return s ? '<div class="sp-team"><span>' + esc(groupName(t)) + ' proudly<br>supported by</span>' + spLogo(s) + '</div>' : '';
+  }
+
+  // BasketballConnect's own match centre (action log, fouls). It's public to view, but its data feed is only for their site, so we link to it.
+  function matchCentreUrl(g) {
+    const m = /competitionUniqueKey=([\w-]+)/.exec((g.comp && g.comp.sourceUrl) || '');
+    return m ? 'https://registration.basketballconnect.com/matchSummary?matchId=' + g.id + '&competitionId=' + g.comp.id + '&competitionUniqueKey=' + m[1] : '';
+  }
+
+  // Player rows built from the scraper's action-log file, used while BasketballConnect's stats feed is still empty.
+  async function logRows(g) {
+    try {
+      const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + g.id + '.json', { cache: 'no-store' });
+      if (!res.ok) return [];
+      const d = await res.json();
+      const out = [];
+      [['team1', g.t1], ['team2', g.t2]].forEach(([side, team]) => {
+        if (!team) return;
+        ((d.players || {})[side] || []).forEach((p) => {
+          if (p.pts == null) return; // older files only carry fouls
+          const hidden = /^hidden player$/i.test(p.player || '');
+          out.push({ teamId: team.id, shirt: String(p.no || ''), name: hidden ? '' : (p.player || ''), hidden,
+            pts: num(p.pts), ft: num(p.ft), p2: num(p.p2), p3: num(p.p3), pf: num(p.fouls), tf: 0, uf: 0 });
+        });
+      });
+      return out;
+    } catch (e) { return []; }
+  }
+
+  /* ---------- live fouls (from the action log, via the club's scraper) ---------- */
+  // The scraper reads BasketballConnect's public match page and publishes <foulsBase>/match-<id>.json:
+  // { updatedAt, status, quarter, players: { team1: [{ no, player, fouls }], team2: [...] }, teamFouls: { team1: [q1..], team2: [q1..] } }
+  // team1 is the first-listed (home) team, the same as g.t1.
+  async function hydrateFouls(el) {
+    const id = parseInt(el.dataset.fouls, 10);
+    const g = DATA.games.find((x) => x.id === id);
+    if (!g || !CFG.foulsBase) return;
+    let d;
+    try {
+      const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + id + '.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      d = await res.json();
+    } catch (e) { d = null; }
+    if (!el.isConnected) return;
+    if (d) { renderFouls(el, d, g, view(g)); const lw = app.querySelector('[data-lw="' + id + '"]'); if (lw) renderLiveWorm(lw, d, g, view(g)); }
+    if (g.status === 'live') { clearTimeout(hydrateFouls.t); hydrateFouls.t = setTimeout(() => { if (el.isConnected && !document.hidden) hydrateFouls(el); }, 30e3); }
+  }
+  // Live worm: the scraper's flow is the running score after each scoring play, [[quarter, team1, team2], ...].
+  function renderLiveWorm(el, d, g, v) {
+    const flow = (d.flow || []).filter((f) => Array.isArray(f) && f.length >= 3);
+    if (!flow.length) { el.hidden = true; return; }
+    const live = g.status === 'live';
+    const m = (f) => (v.home ? f[1] - f[2] : f[2] - f[1]);
+    const curQ = Math.max(d.quarter || 1, flow[flow.length - 1][0]);
+    const nQ = Math.max(4, curQ);
+    const perQ = (q) => flow.filter((f) => f[0] === q).length;
+    const done = []; for (let q = 1; q < curQ; q++) done.push(perQ(q));
+    const avg = done.length ? done.reduce((a, b) => a + b, 0) / done.length : 12;
+    const curFrac = live ? Math.min(0.92, Math.max(0.12, (perQ(curQ) + 0.5) / Math.max(avg, 1))) : 1;
+    const W = 600, H = 120, mid = H / 2;
+    const pts = [[0, 0]];
+    let best = 0, worst = 0, changes = 0, prev = 0, run = { n: 0, who: 0, q: 0 }, cr = { n: 0, who: 0 }, last = [0, 0, 0];
+    for (let q = 1; q <= curQ; q++) {
+      const e = flow.filter((f) => f[0] === q);
+      const span = q === curQ ? curFrac : 1;
+      e.forEach((f, i) => {
+        const x = ((q - 1) + span * (q === curQ && live ? (i + 1) / e.length : (i + 1) / (e.length + 0.5))) / nQ * W;
+        const mm = m(f);
+        pts.push([x, mm]);
+        best = Math.max(best, mm); worst = Math.min(worst, mm);
+        if (mm && prev && Math.sign(mm) !== Math.sign(prev)) changes++;
+        if (mm) prev = mm;
+        const du = (v.home ? f[1] - last[1] : f[2] - last[2]), dt = (v.home ? f[2] - last[2] : f[1] - last[1]);
+        const who = du > 0 ? 1 : dt > 0 ? -1 : 0, n = Math.max(du, dt);
+        if (who) { if (who === cr.who) cr.n += n; else cr = { n, who }; if (cr.n > run.n) run = { n: cr.n, who, q }; }
+        last = f;
+      });
+    }
+    const nowX = live ? ((curQ - 1) + curFrac) / nQ * W : W;
+    const cur = m(flow[flow.length - 1]);
+    pts.push([nowX, cur]);
+    const R = Math.max(10, best, -worst);
+    const y = (mm) => mid - mm / R * (mid - 10);
+    let path = 'M0,' + mid;
+    pts.forEach(([x, mm], i) => { if (i) path += 'H' + x.toFixed(1) + 'V' + y(mm).toFixed(1); });
+    const area = path + 'V' + mid + 'Z';
+    const usName = v.us.short, themName = v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
+    const sid = 'lw' + g.id;
+    const lbl = cur > 0 ? '+' + cur : cur < 0 ? String(cur) : 'Level';
+    const lx = Math.min(nowX + 10, W - 50);
+    const svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc('Margin through the game, ' + usName + ' ' + lbl) + '">' +
+      '<defs><clipPath id="' + sid + 'u"><rect x="0" y="0" width="' + W + '" height="' + mid + '"/></clipPath><clipPath id="' + sid + 'd"><rect x="0" y="' + mid + '" width="' + W + '" height="' + mid + '"/></clipPath></defs>' +
+      (live ? '<rect x="' + nowX.toFixed(1) + '" y="0" width="' + (W - nowX).toFixed(1) + '" height="' + H + '" fill="rgba(255,255,255,.05)"/>' : '') +
+      Array.from({ length: nQ - 1 }, (_, i) => '<line x1="' + ((i + 1) * W / nQ).toFixed(1) + '" x2="' + ((i + 1) * W / nQ).toFixed(1) + '" y1="0" y2="' + H + '" stroke="rgba(255,255,255,.14)" stroke-dasharray="3 4"/>').join('') +
+      '<line x1="0" x2="' + W + '" y1="' + mid + '" y2="' + mid + '" stroke="rgba(255,255,255,.35)"/>' +
+      '<path d="' + area + '" fill="var(--red)" fill-opacity=".3" clip-path="url(#' + sid + 'u)"/><path d="' + area + '" fill="rgba(255,255,255,.14)" clip-path="url(#' + sid + 'd)"/>' +
+      '<path d="' + path + '" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linejoin="round"/>' +
+      (live ? '<circle class="lw-pulse" cx="' + nowX.toFixed(1) + '" cy="' + y(cur).toFixed(1) + '" r="4" fill="none" stroke="var(--red)" stroke-width="2"/>' +
+        '<circle cx="' + nowX.toFixed(1) + '" cy="' + y(cur).toFixed(1) + '" r="5" fill="var(--red)" stroke="var(--navy)" stroke-width="2"/>' +
+        '<text x="' + lx.toFixed(1) + '" y="' + (y(cur) + 5).toFixed(1) + '" class="lw-now">' + esc(lbl) + '</text>' : '') +
+      '<text x="4" y="14" class="lw-side">' + esc(usName) + ' ahead</text><text x="4" y="' + (H - 4) + '" class="lw-side">' + esc(themName) + ' ahead</text></svg>';
+    const chips = [];
+    if (best > 0) chips.push('Biggest lead +' + best);
+    if (worst < 0) chips.push(themName + ' led by ' + (-worst));
+    if (changes) chips.push(changes + ' lead change' + (changes === 1 ? '' : 's'));
+    if (run.n >= 6) chips.push((run.who > 0 ? usName : themName) + ' ' + run.n + '–0 run in ' + (run.q > 4 ? 'OT' : 'Q' + run.q));
+    el.hidden = false;
+    el.innerHTML = svg + '<div class="lw-q" style="grid-template-columns:repeat(' + nQ + ',1fr)">' + Array.from({ length: nQ }, (_, i) => '<span' + (live && i + 1 === curQ ? ' class="on"' : '') + '>' + (i >= 4 ? 'OT' : 'Q' + (i + 1)) + '</span>').join('') + '</div>' +
+      (chips.length ? '<div class="lw-foot">' + chips.map((c) => '<span>' + esc(c) + '</span>').join('') + '</div>' : '');
+  }
+  function renderFouls(el, d, g, v) {
+    const ourSide = v.home ? 'team1' : 'team2', theirSide = v.home ? 'team2' : 'team1';
+    const players = d.players || {}, tf = d.teamFouls || {};
+    const q = d.quarter || Math.max(1, (tf.team1 || []).length, (tf.team2 || []).length);
+    const qLabel = q > 4 ? 'OT' : 'Q' + q;
+    const usName = v.us.short, themName = v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
+    const pips = (n, max, cls) => '<span class="fpips' + (cls ? ' ' + cls : '') + '">' + Array.from({ length: max }, (_, i) => '<i' + (i < n ? ' class="on"' : '') + '></i>').join('') + '</span>';
+    const teamBox = (side, name) => {
+      const n = (tf[side] || [])[q - 1] || 0;
+      const pen = n >= 4;
+      return '<div class="ft-team' + (pen ? ' pen' : '') + '"><span class="ft-name">' + esc(name) + '</span>' + pips(Math.min(n, 4), 4) +
+        '<b>' + n + '</b><span class="ft-note">' + (pen ? 'In the penalty: fouls now give free throws' : (4 - n) + ' to the penalty') + '</span></div>';
+    };
+    const list = (side, name, mine) => {
+      const rows = (players[side] || []).filter((p) => p.fouls > 0).sort((a, b) => b.fouls - a.fouls || num(a.no) - num(b.no));
+      return '<div class="fl-team"><h4>' + esc(name) + '</h4>' + (rows.length ? rows.map((p) => {
+        const st = p.fouls >= 5 ? 'out' : p.fouls === 4 ? 'warn' : '';
+        return '<div class="fl-row ' + st + '"><span class="fl-no">' + esc(p.no) + '</span><span class="fl-name">' + esc(/^hidden player$/i.test(p.player || '') ? 'Player #' + p.no : (p.player || '')) + '</span>' +
+          pips(Math.min(p.fouls, 5), 5) + '<span class="fl-tag">' + (st === 'out' ? 'Out' : st === 'warn' ? 'On 4' : p.fouls) + '</span></div>';
+      }).join('') : '<div class="fl-none">No fouls yet</div>') + '</div>';
+    };
+    const upd = d.updatedAt ? time(new Date(d.updatedAt)) : '';
+    el.hidden = false;
+    el.innerHTML = '<div class="card-head"><h3>' + (g.status === 'live' ? '<span class="alog-dot"></span>Live fouls' : 'Fouls') + '</h3><span class="meta">' + esc((g.status === 'live' ? qLabel + ' · ' : '') + (upd ? 'updated ' + upd : '')) + '</span></div>' +
+      (g.status === 'live' ? '<div class="ft-grid">' + teamBox(ourSide, usName) + teamBox(theirSide, themName) + '</div>' : '') +
+      '<div class="fl-grid">' + list(ourSide, usName, true) + list(theirSide, themName, false) + '</div>' +
+      '<p class="fine">From BasketballConnect\'s live action log. Team fouls reset each quarter.</p>';
   }
 
   /* ---------- sortable stat tables ---------- */
@@ -685,8 +961,6 @@
   const SITE_NAME = 'Lions Den';
   const STORE_A2HS = 'lions.a2hsLater';
   let installPrompt = null;
-  const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isAndroid = () => /Android/i.test(navigator.userAgent);
   function installBanner() {
     if (isStandalone()) return '';
@@ -755,11 +1029,22 @@
     if (b.dataset.round != null) { location.hash = '#/results/' + b.dataset.round; return; }
     if (b.dataset.age != null) { ui.age = b.dataset.age; route(); return; }
     if (b.dataset.sex != null) { ui.sex = b.dataset.sex; route(); return; }
+    if (b.dataset.bell != null) {
+      b.disabled = true;
+      toggleBell(parseInt(b.dataset.bell, 10))
+        .then(() => route())
+        .catch((err) => { b.disabled = false; toast('<span>Couldn\'t change alerts: ' + esc(err.message) + '</span>'); });
+      return;
+    }
     if (b.dataset.star != null) {
       const id = parseInt(b.dataset.star, 10);
       const ids = myTeamIds();
       const nextIds = ids.includes(id) ? ids.filter((v) => v !== id) : ids.concat(id);
       store.set(STORE_MY_TEAM, nextIds.length ? nextIds.join(',') : null);
+      if (!nextIds.includes(id) && bellIds().includes(id)) {
+        const rest = bellIds().filter((v) => v !== id); setBellIds(rest);
+        (rest.length ? syncAlerts() : disableAlerts()).catch(() => {});
+      }
       route();
     }
   });
