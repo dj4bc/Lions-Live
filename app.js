@@ -462,6 +462,7 @@
       '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs">' + esc(g.status === 'upcoming' ? '–' : v.su ?? 0) + '</span>' +
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
+      (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '" hidden></div>' : '') +
       (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
         (CFG.foulsBase ? '<section class="card fouls-card" data-fouls="' + g.id + '" hidden></section>' : '') +
@@ -745,8 +746,71 @@
       d = await res.json();
     } catch (e) { d = null; }
     if (!el.isConnected) return;
-    if (d) renderFouls(el, d, g, view(g));
+    if (d) { renderFouls(el, d, g, view(g)); const lw = app.querySelector('[data-lw="' + id + '"]'); if (lw) renderLiveWorm(lw, d, g, view(g)); }
     if (g.status === 'live') { clearTimeout(hydrateFouls.t); hydrateFouls.t = setTimeout(() => { if (el.isConnected && !document.hidden) hydrateFouls(el); }, 30e3); }
+  }
+  // Live worm: the scraper's flow is the running score after each scoring play, [[quarter, team1, team2], ...].
+  function renderLiveWorm(el, d, g, v) {
+    const flow = (d.flow || []).filter((f) => Array.isArray(f) && f.length >= 3);
+    if (!flow.length) { el.hidden = true; return; }
+    const live = g.status === 'live';
+    const m = (f) => (v.home ? f[1] - f[2] : f[2] - f[1]);
+    const curQ = Math.max(d.quarter || 1, flow[flow.length - 1][0]);
+    const nQ = Math.max(4, curQ);
+    const perQ = (q) => flow.filter((f) => f[0] === q).length;
+    const done = []; for (let q = 1; q < curQ; q++) done.push(perQ(q));
+    const avg = done.length ? done.reduce((a, b) => a + b, 0) / done.length : 12;
+    const curFrac = live ? Math.min(0.92, Math.max(0.12, (perQ(curQ) + 0.5) / Math.max(avg, 1))) : 1;
+    const W = 600, H = 120, mid = H / 2;
+    const pts = [[0, 0]];
+    let best = 0, worst = 0, changes = 0, prev = 0, run = { n: 0, who: 0, q: 0 }, cr = { n: 0, who: 0 }, last = [0, 0, 0];
+    for (let q = 1; q <= curQ; q++) {
+      const e = flow.filter((f) => f[0] === q);
+      const span = q === curQ ? curFrac : 1;
+      e.forEach((f, i) => {
+        const x = ((q - 1) + span * (q === curQ && live ? (i + 1) / e.length : (i + 1) / (e.length + 0.5))) / nQ * W;
+        const mm = m(f);
+        pts.push([x, mm]);
+        best = Math.max(best, mm); worst = Math.min(worst, mm);
+        if (mm && prev && Math.sign(mm) !== Math.sign(prev)) changes++;
+        if (mm) prev = mm;
+        const du = (v.home ? f[1] - last[1] : f[2] - last[2]), dt = (v.home ? f[2] - last[2] : f[1] - last[1]);
+        const who = du > 0 ? 1 : dt > 0 ? -1 : 0, n = Math.max(du, dt);
+        if (who) { if (who === cr.who) cr.n += n; else cr = { n, who }; if (cr.n > run.n) run = { n: cr.n, who, q }; }
+        last = f;
+      });
+    }
+    const nowX = live ? ((curQ - 1) + curFrac) / nQ * W : W;
+    const cur = m(flow[flow.length - 1]);
+    pts.push([nowX, cur]);
+    const R = Math.max(10, best, -worst);
+    const y = (mm) => mid - mm / R * (mid - 10);
+    let path = 'M0,' + mid;
+    pts.forEach(([x, mm], i) => { if (i) path += 'H' + x.toFixed(1) + 'V' + y(mm).toFixed(1); });
+    const area = path + 'V' + mid + 'Z';
+    const usName = v.us.short, themName = v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
+    const sid = 'lw' + g.id;
+    const lbl = cur > 0 ? '+' + cur : cur < 0 ? String(cur) : 'Level';
+    const lx = Math.min(nowX + 10, W - 50);
+    const svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc('Margin through the game, ' + usName + ' ' + lbl) + '">' +
+      '<defs><clipPath id="' + sid + 'u"><rect x="0" y="0" width="' + W + '" height="' + mid + '"/></clipPath><clipPath id="' + sid + 'd"><rect x="0" y="' + mid + '" width="' + W + '" height="' + mid + '"/></clipPath></defs>' +
+      (live ? '<rect x="' + nowX.toFixed(1) + '" y="0" width="' + (W - nowX).toFixed(1) + '" height="' + H + '" fill="rgba(255,255,255,.05)"/>' : '') +
+      Array.from({ length: nQ - 1 }, (_, i) => '<line x1="' + ((i + 1) * W / nQ).toFixed(1) + '" x2="' + ((i + 1) * W / nQ).toFixed(1) + '" y1="0" y2="' + H + '" stroke="rgba(255,255,255,.14)" stroke-dasharray="3 4"/>').join('') +
+      '<line x1="0" x2="' + W + '" y1="' + mid + '" y2="' + mid + '" stroke="rgba(255,255,255,.35)"/>' +
+      '<path d="' + area + '" fill="var(--red)" fill-opacity=".3" clip-path="url(#' + sid + 'u)"/><path d="' + area + '" fill="rgba(255,255,255,.14)" clip-path="url(#' + sid + 'd)"/>' +
+      '<path d="' + path + '" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linejoin="round"/>' +
+      (live ? '<circle class="lw-pulse" cx="' + nowX.toFixed(1) + '" cy="' + y(cur).toFixed(1) + '" r="4" fill="none" stroke="var(--red)" stroke-width="2"/>' +
+        '<circle cx="' + nowX.toFixed(1) + '" cy="' + y(cur).toFixed(1) + '" r="5" fill="var(--red)" stroke="var(--navy)" stroke-width="2"/>' +
+        '<text x="' + lx.toFixed(1) + '" y="' + (y(cur) + 5).toFixed(1) + '" class="lw-now">' + esc(lbl) + '</text>' : '') +
+      '<text x="4" y="14" class="lw-side">' + esc(usName) + ' ahead</text><text x="4" y="' + (H - 4) + '" class="lw-side">' + esc(themName) + ' ahead</text></svg>';
+    const chips = [];
+    if (best > 0) chips.push('Biggest lead +' + best);
+    if (worst < 0) chips.push(themName + ' led by ' + (-worst));
+    if (changes) chips.push(changes + ' lead change' + (changes === 1 ? '' : 's'));
+    if (run.n >= 6) chips.push((run.who > 0 ? usName : themName) + ' ' + run.n + '–0 run in ' + (run.q > 4 ? 'OT' : 'Q' + run.q));
+    el.hidden = false;
+    el.innerHTML = svg + '<div class="lw-q" style="grid-template-columns:repeat(' + nQ + ',1fr)">' + Array.from({ length: nQ }, (_, i) => '<span' + (live && i + 1 === curQ ? ' class="on"' : '') + '>' + (i >= 4 ? 'OT' : 'Q' + (i + 1)) + '</span>').join('') + '</div>' +
+      (chips.length ? '<div class="lw-foot">' + chips.map((c) => '<span>' + esc(c) + '</span>').join('') + '</div>' : '');
   }
   function renderFouls(el, d, g, v) {
     const ourSide = v.home ? 'team1' : 'team2', theirSide = v.home ? 'team2' : 'team1';

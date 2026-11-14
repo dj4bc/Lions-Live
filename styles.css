@@ -381,3 +381,16 @@ table.box td.empty { white-space: normal; }
 .alerts-bar button { flex: 0 0 auto; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 0; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
 .alerts-bar.on { background: var(--tint); }
 .alerts-bar.on button { background: transparent; color: var(--blue); border: 1px solid var(--line); }
+
+/* live worm inside the score box */
+.lw { margin: 2px -4px 0; }
+.lw svg { display: block; width: 100%; height: auto; overflow: visible; }
+.lw .lw-side { fill: rgba(255,255,255,.6); font-size: 12px; font-family: var(--body); }
+.lw .lw-now { fill: #fff; font-size: 16px; font-weight: 700; font-family: var(--body); }
+.lw-q { display: grid; font-size: 12px; color: var(--head-sub); text-align: center; padding: 4px 4px 0; }
+.lw-q .on { color: var(--red); font-weight: 700; }
+.lw-foot { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 4px 0; }
+.lw-foot span { background: rgba(255,255,255,.1); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; }
+@keyframes lw-pulse { 0% { r: 4; opacity: 1; } 100% { r: 12; opacity: 0; } }
+.lw-pulse { animation: lw-pulse 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .lw-pulse { animation: none; } }
