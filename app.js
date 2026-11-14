@@ -464,7 +464,7 @@
       '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs">' + esc(g.status === 'upcoming' ? '–' : v.su ?? 0) + '</span>' +
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp">' + esc(g.status === 'upcoming' ? '–' : v.sth ?? 0) + '</span></div>' +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
-      (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '" hidden></div>' : '') +
+      (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '"' + (g.status === 'live' ? '' : ' hidden') + '></div>' : '') +
       (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
         (CFG.foulsBase ? '<section class="card fouls-card" data-fouls="' + g.id + '" hidden></section>' : '') +
@@ -817,7 +817,8 @@
       d = await res.json();
     } catch (e) { d = null; }
     if (!el.isConnected) return;
-    if (d) { renderFouls(el, d, g, view(g)); const lw = app.querySelector('[data-lw="' + id + '"]'); if (lw) renderLiveWorm(lw, d, g, view(g)); }
+    const lw = app.querySelector('[data-lw="' + id + '"]');
+    if (d) { renderFouls(el, d, g, view(g)); if (lw) renderLiveWorm(lw, d, g, view(g)); } else if (lw) lw.hidden = true;
     if (g.status === 'live') { clearTimeout(hydrateFouls.t); hydrateFouls.t = setTimeout(() => { if (el.isConnected && !document.hidden) hydrateFouls(el); }, 30e3); }
   }
   // Live worm: the scraper's flow is the running score after each scoring play, [[quarter, team1, team2], ...].
@@ -1004,6 +1005,8 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const w = document.querySelector('.a2hs-sheet-wrap'); if (w) w.remove(); } });
 
   /* ---------- routing ---------- */
+  const HYDRATED = '[data-lw], [data-fouls], [data-flow], [data-worm], [data-game-stats], [data-ladder], [data-team-stats]';
+  const hydKey = (el) => ['lw', 'fouls', 'flow', 'worm', 'gameStats', 'ladder', 'teamStats'].map((a) => el.dataset[a] != null ? a + el.dataset[a] : '').join('');
   function route() {
     if (!DATA) return;
     const h = (location.hash || '#/').replace(/^#/, '');
@@ -1014,7 +1017,30 @@
     else if (parts[0] === 'team') { nav = 'teams'; html = pageTeam(parseInt(parts[1], 10)); }
     else if (parts[0] === 'game') { nav = 'results'; html = pageGame(parseInt(parts[1], 10)); }
     else html = pageHome();
+    // On a refresh of the same page, keep cards that already loaded so they update in place
+    // instead of flashing back to "Loading…" (and keep the swiped-to card).
+    const sig = h + '|' + (parts[0] === 'game' ? ((DATA.games.find((x) => x.id === parseInt(parts[1], 10)) || {}).status || '') : '');
+    const same = route.sig === sig;
+    const kept = new Map(), present = new Set();
+    let swipeX = 0;
+    if (same) {
+      app.querySelectorAll(HYDRATED).forEach((el) => {
+        const k = hydKey(el); present.add(k);
+        if (!el.querySelector(':scope > .loading')) kept.set(k, { html: el.innerHTML, hidden: el.hidden });
+      });
+      const tr = app.querySelector('.swipe-track'); if (tr) swipeX = tr.scrollLeft;
+    }
     app.innerHTML = html;
+    if (same) {
+      app.querySelectorAll(HYDRATED).forEach((el) => {
+        const k = hydKey(el), was = kept.get(k);
+        if (was) { el.innerHTML = was.html; el.hidden = was.hidden; }
+        else if (!present.has(k)) { const box = el.closest('.swipe, [data-ladder-wrap]') || el; box.remove(); } // it had no data last time
+      });
+      const tr = app.querySelector('.swipe-track');
+      if (tr && swipeX) { tr.scrollLeft = swipeX; tr.dispatchEvent(new Event('scroll')); }
+    }
+    route.sig = sig;
     document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === nav));
     const strip = document.getElementById('sponsor-strip');
     if (strip) strip.hidden = !(nav === 'home' && strip.innerHTML);

@@ -414,3 +414,10 @@ table.box td.empty { white-space: normal; }
 .ladder tr.me .ld-pos { box-shadow: inset 4px 0 0 var(--red); color: var(--navy); }
 .ladder tr.me .ld-name { font-weight: 800; color: var(--navy); }
 .ladder-card .fine { margin: 0; padding: 10px 14px 12px; font-size: 12px; color: var(--muted); }
+
+/* reserve room for cards that load after the page, so nothing below jumps */
+.lw:empty:not([hidden]) { min-height: 186px; }
+.worm-card:has(> .loading) { min-height: 330px; }
+.box-grid:has(> .loading) { min-height: 420px; }
+.stats-card:has(> .loading) { min-height: 260px; }
+.ladder-card:has(> .loading) { min-height: 220px; }
