@@ -828,6 +828,7 @@
   // gets a plain "Full time" banner with no siren.
   const justFinal = new Map(); // game id -> when this page saw it finish
   const sirenQueue = new Set();
+  let fromAlert = new URLSearchParams(location.search).get('from') === 'alert';
   function playSirens() {
     sirenQueue.forEach((id) => {
       const boxes = app.querySelectorAll('[data-final="' + id + '"]');
@@ -1260,6 +1261,14 @@
       const wasLive = new Set(DATA ? DATA.games.filter((g) => g.status === 'live').map((g) => g.id) : []);
       DATA = normalise(await fetchAll());
       DATA.games.forEach((g) => { if (wasLive.has(g.id) && g.status === 'final' && !justFinal.has(g.id)) { justFinal.set(g.id, Date.now()); sirenQueue.add(g.id); } });
+      // Opened by tapping a full-time alert: play the siren for that game once, as if you had watched it finish.
+      if (fromAlert) {
+        fromAlert = false;
+        const m = (location.hash || '').match(/^#\/game\/(\d+)/);
+        const g = m && DATA.games.find((x) => x.id === parseInt(m[1], 10));
+        if (g && g.status === 'final' && Date.now() - g.start.getTime() < 5 * 3600e3) { justFinal.set(g.id, Date.now()); sirenQueue.add(g.id); }
+        try { const u = new URL(location.href); u.searchParams.delete('from'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) { /* fine */ }
+      }
       document.getElementById('updated').textContent = 'Updated ' + time(DATA.fetchedAt);
       const y = window.scrollY;
       route();
