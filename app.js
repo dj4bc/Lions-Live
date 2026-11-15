@@ -604,8 +604,11 @@
     // Pool games set the ladder; finals and cross-grade games sit in their own divisions.
     const g = tgs.find((x) => x.divisionId && !x.bye && !x.finals && /^round\s*\d+/i.test(x.round)) || tgs.find((x) => x.divisionId && !x.finals) || tgs.find((x) => x.divisionId);
     if (!g || !compKey(g.comp)) { drop(); return; }
-    let d;
-    try { d = await getLadder(g.comp, g.divisionId); } catch (e) { if (el.isConnected) drop(); return; }
+    let d, fin = null;
+    const [lr, fr] = await Promise.allSettled([getLadder(g.comp, g.divisionId), getDivisionGames(g.comp, g.divisionId)]);
+    if (lr.status !== 'fulfilled') { if (el.isConnected) drop(); return; }
+    d = lr.value;
+    if (fr.status === 'fulfilled') fin = fr.value;
     if (!el.isConnected) return;
     const rows = (d.ladders || []).filter((r) => !num(r.isHidden)).sort((a, b) => (num(a.rk) || 99) - (num(b.rk) || 99));
     if (!rows.some((r) => r.id === id)) { drop(); return; }
@@ -614,15 +617,131 @@
     const dot = (c) => '<i class="ld-f ' + (c === 'WON' ? 'w' : c === 'LOST' ? 'l' : 'd') + '" title="' + (c === 'WON' ? 'Win' : c === 'LOST' ? 'Loss' : 'Draw') + '"></i>';
     const head = wrap && wrap.querySelector('.section-title');
     if (head) head.textContent = 'Ladder · ' + (rows[0].divisionName || g.division || '');
+    const fx = fin ? finalsModel(fin, rows) : null;
     el.innerHTML = '<table class="ladder"><thead><tr><th class="ld-pos">#</th><th class="ld-team">Team</th><th>P</th><th>W</th><th>L</th>' + (hasD ? '<th>D</th>' : '') + '<th>%</th><th class="ld-pts">Pts</th></tr></thead><tbody>' +
       rows.map((r, i) => {
-        const cls = r.id === id ? 'me' : isLions(r.name || '') ? 'club' : '';
+        const cls = [r.id === id ? 'me' : isLions(r.name || '') ? 'club' : '', fx && fx.cut && i === fx.cut ? 'ld-cut' : ''].filter(Boolean).join(' ');
         const f = form.get(r.id) || [];
-        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td class="ld-pos">' + (r.rk || i + 1) + '</td><td class="ld-team"><span class="ld-name">' + esc(r.name) + '</span>' + (f.length ? '<span class="ld-form" aria-label="Last results">' + f.map(dot).join('') + '</span>' : '') + '</td>' +
+        const seed = fx && i < fx.spots ? '<span class="ld-seed">' + fx.firstLabel + '</span>' : '';
+        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td class="ld-pos">' + (r.rk || i + 1) + '</td><td class="ld-team"><span class="ld-name">' + esc(r.name) + seed + '</span>' + (f.length ? '<span class="ld-form" aria-label="Last results">' + f.map(dot).join('') + '</span>' : '') + '</td>' +
           '<td>' + num(r.P) + '</td><td>' + num(r.W) + '</td><td>' + num(r.L) + '</td>' + (hasD ? '<td>' + num(r.D) + '</td>' : '') +
           '<td>' + Math.round(num(r.goalAverage)) + '</td><td class="ld-pts">' + num(r.PTS) + '</td></tr>';
       }).join('') + '</tbody></table>' +
-      '<p class="fine">% is points for divided by points against. Dots show each team\'s last 3 results, newest on the right. From BasketballConnect.</p>';
+      '<p class="fine">% is points for divided by points against. Dots show each team\'s last 3 results, newest on the right.' +
+      (fx && fx.cut ? ' The dashed line is the finals cut.' : '') + ' From BasketballConnect.</p>' +
+      (fx ? finalsHtml(fx, id) : '');
+  }
+
+  /* ---------- finals: cut line and pairings under the ladder ---------- */
+  // Every game in one division, so finals still listed as "1 v 4" or "WSF1 v WSF2" show up.
+  const divCache = new Map();
+  async function getDivisionGames(comp, divId) {
+    const hit = divCache.get(divId);
+    if (hit && Date.now() - hit.at < 60e3) return hit.data;
+    const mock = new URLSearchParams(location.search).get('mock');
+    const url = mock ? 'div-' + divId + '.json' : CFG.apiBase + '/livescores/round/matches?competitionId=' + comp.id + '&divisionId=' + divId + '&teamIds=&ignoreStatuses=[1]';
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const games = [];
+    (json.rounds || []).forEach((rd) => (rd.matches || []).forEach((m) => {
+      if (m.divisionId && m.divisionId !== divId) return;
+      const st = (m.matchStatus || '').toUpperCase();
+      games.push({ id: m.id, round: rd.name || '', finals: !!m.isFinals || !!m.finalsAlias, alias: m.finalsAlias || '',
+        start: new Date(m.startTime), n1: ((m.team1 && m.team1.name) || '').trim(), n2: ((m.team2 && m.team2.name) || '').trim(),
+        s1: m.team1Score, s2: m.team2Score, status: st === 'ENDED' ? 'final' : (st && !/POSTPONED|CANCEL|ABANDON/.test(st) ? 'live' : 'upcoming'),
+        venue: ((m.venueCourt || {}).venue || {}).shortName || ((m.venueCourt || {}).venue || {}).name || '', court: (m.venueCourt || {}).name || '' });
+    }));
+    divCache.set(divId, { at: Date.now(), data: games });
+    return games;
+  }
+
+  // Finals stage label from its alias or round name: SF1 -> Semi final, GF1 -> Grand final.
+  function stageName(g) {
+    const a = g.alias.toUpperCase(), r = g.round;
+    if (/^GF/.test(a) || /grand/i.test(r)) return 'Grand final';
+    if (/^PF/.test(a) || /prelim/i.test(r)) return 'Preliminary final';
+    if (/^SF/.test(a) || /semi/i.test(r)) return 'Semi final';
+    if (/^QF/.test(a) || /quarter/i.test(r)) return 'Quarter final';
+    if (/^EF/.test(a) || /elim/i.test(r)) return 'Elimination final';
+    if (/cross/i.test(r)) return 'Crossover';
+    return r.replace(/^finals\s*-\s*/i, 'Finals ') || 'Final';
+  }
+
+  function finalsModel(games, rows) {
+    const finals = games.filter((g) => g.finals).sort((a, b) => a.start - b.start || a.alias.localeCompare(b.alias));
+    if (!finals.length) return null;
+    const pool = games.filter((g) => !g.finals);
+    const poolDone = pool.length > 0 && pool.every((g) => g.status === 'final');
+    // A placeholder is a ladder spot ("1", "4") or the winner/loser of another final ("WSF1", "LSF2").
+    const seedOf = (n) => (/^\d+$/.test(n) ? parseInt(n, 10) : null);
+    const byAlias = new Map(finals.filter((g) => g.alias).map((g) => [g.alias.toUpperCase(), g]));
+    const resolve = (n) => {
+      const sd = seedOf(n);
+      if (sd) { const r = rows[sd - 1]; return { seed: sd, name: r ? r.name : 'Ladder ' + sd, real: false, proj: true }; }
+      const ref = /^([WL])(\w+\d+)$/i.exec(n);
+      if (ref && byAlias.has(ref[2].toUpperCase())) {
+        const src = byAlias.get(ref[2].toUpperCase()), won = ref[1].toUpperCase() === 'W';
+        const label = (won ? 'Winner ' : 'Loser ') + src.alias.toUpperCase();
+        if (src.status === 'final' && src.s1 != null && src.s1 !== src.s2) {
+          const s = resolve((src.s1 > src.s2) === won ? src.n1 : src.n2);
+          return Object.assign({}, s, { from: label, proj: s.proj });
+        }
+        const lead = src.status === 'live' && src.s1 !== src.s2 ? resolve((src.s1 > src.s2) === won ? src.n1 : src.n2) : null;
+        return { name: label, real: false, pending: true, hint: lead ? (won ? 'leading' : 'trailing') + ': ' + lead.name : '' };
+      }
+      const i = rows.findIndex((r) => r.name === n);
+      return { seed: i >= 0 ? i + 1 : null, name: n, real: true };
+    };
+    const items = finals.map((g) => ({ g, stage: stageName(g), a: resolve(g.n1), b: resolve(g.n2) }));
+    // Teams in the first finals stage = finals spots, which puts the cut line on the ladder.
+    const firstStage = items[0].stage;
+    const firstSeeds = new Set();
+    items.filter((x) => x.stage === firstStage).forEach((x) => [x.a, x.b].forEach((t) => { if (t.seed) firstSeeds.add(t.seed); }));
+    const spots = firstSeeds.size ? Math.max(...firstSeeds) : 0;
+    const short = { 'Grand final': 'GF', 'Semi final': 'SF', 'Preliminary final': 'PF', 'Quarter final': 'QF', 'Elimination final': 'EF' };
+    return { items, poolDone, spots, cut: spots && spots < rows.length ? spots : 0, firstLabel: short[firstStage] || 'F' };
+  }
+
+  function finalsHtml(fx, id) {
+    const me = DATA.teams.get(id);
+    const mine = (t) => me && t.name === me.name;
+    const side = (t, score, show) => {
+      const sub = t.from && !t.pending ? t.from : t.hint || '';
+      return '<div class="fn-t' + (mine(t) ? ' me' : '') + (t.pending ? ' pending' : '') + '"><span class="fn-seed">' + (t.seed || '') + '</span>' +
+        '<span class="fn-name"><span>' + esc(t.name) + '</span>' + (t.proj ? '<em class="fn-proj">' + (fx.poolDone && !t.from ? 'Locked' : 'Projected') + '</em>' : '') +
+        (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><span class="fn-score">' + (show ? esc(score) : '') + '</span></div>';
+    };
+    const html = fx.items.map(({ g, stage, a, b }) => {
+      const show = g.status !== 'upcoming';
+      const ours = DATA.games.find((x) => x.id === g.id);
+      const where = [g.venue, g.court.replace(/^court\s*/i, 'Ct ')].filter(Boolean).join(' ');
+      const when = (g.status === 'live' ? '<span class="fn-live">Live</span>' : g.status === 'final' ? 'Final' : esc(whenShort(g.start))) +
+        (where && g.status !== 'final' ? ' · ' + esc(where) : '');
+      const tag = ours ? 'a' : 'div';
+      return '<' + tag + ' class="fn-game"' + (ours ? ' href="#/game/' + g.id + '"' : '') + '><div class="fn-h"><span>' + esc(stage) + (g.alias ? ' · ' + esc(g.alias) : '') + '</span><span>' + when + '</span></div>' +
+        side(a, g.s1, show) + side(b, g.s2, show) + '</' + tag + '>';
+    }).join('');
+    const anyProj = fx.items.some((x) => x.a.proj || x.b.proj || x.a.pending || x.b.pending);
+    return '<div class="finals-block"><h3>Finals</h3>' + html +
+      '<p class="fine">' + (anyProj ? (fx.poolDone ? 'Teams marked "Locked" are from the final ladder. ' : 'Projected teams come from the ladder as it stands now and can still change. ') +
+        'BasketballConnect fills in the real names once each spot is decided. ' : '') + 'Tap a game with our team in it for the box score.</p></div>';
+  }
+
+  // Live cards on Game day read the scraper too, so baskets animate there as well as on the box score.
+  async function pollLiveCards() {
+    clearTimeout(pollLiveCards.t);
+    const ticks = [...app.querySelectorAll('.live-card [data-tick]')];
+    if (!ticks.length || !CFG.foulsBase) return;
+    await Promise.all(ticks.map(async (el) => {
+      const g = DATA.games.find((x) => x.id === parseInt(el.dataset.tick, 10));
+      if (!g || g.status !== 'live') return;
+      try {
+        const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + g.id + '.json', { cache: 'no-store' });
+        if (res.ok) scoreMoments(g, await res.json());
+      } catch (e) { /* keep the score as it is */ }
+    }));
+    pollLiveCards.t = setTimeout(() => { if (!document.hidden && app.querySelector('.live-card [data-tick]')) pollLiveCards(); }, 30e3);
   }
 
   // Live cards on Game day read the scraper too, so baskets animate there as well as on the box score.
