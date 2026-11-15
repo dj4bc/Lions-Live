@@ -424,8 +424,7 @@ table.box td.empty { white-space: normal; }
 /* Score moments: ball bounce, gold ripple, "+2" float and a one-line ticker on the live score box */
 .game-hero, .live-card { position: relative; isolation: isolate; }
 .game-lines .gs, .live-lines .s1, .live-lines .s2 { position: relative; }
-.tick { font-size: 13px; color: #fff; background: rgba(255,255,255,.1); border-radius: 8px; padding: 7px 10px; min-height: 36px; line-height: 18px; box-sizing: content-box; }
-@media (min-width: 600px) { .tick { min-height: 18px; } }
+.tick { font-size: 13px; color: #fff; background: rgba(255,255,255,.1); border-radius: 8px; padding: 7px 10px; height: 18px; line-height: 18px; box-sizing: content-box; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tick:empty::before { content: '\00a0'; }
 .tick b { color: #fff; }
 .tick.in { animation: sm-tick .4s ease-out; }
