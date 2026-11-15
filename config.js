@@ -52,6 +52,9 @@ window.LIONS_CONFIG = {
   foulsBase: 'https://fouls.adamforb.es',
   // Game alerts (web push) service on the Linode. Leave empty to hide the alerts switch.
   pushBase: 'https://fouls.adamforb.es/push',
+  // Finals list: name the team for a ladder spot ("1 v 2") only this many hours before the game,
+  // or once all pool games are done. Until then it shows "1st on ladder".
+  finalsProjectHours: 48,
   timeZone: 'Australia/Adelaide',
   // How often to refresh while any Lions game is live (milliseconds).
   liveRefreshMs: 60000
