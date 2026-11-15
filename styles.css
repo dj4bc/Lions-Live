@@ -473,3 +473,6 @@ a.fn-game:hover { border-color: var(--blue); color: inherit; }
 .fn-proj { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); border: 1px dashed var(--line); border-radius: 4px; padding: 0 5px; }
 .fn-score { font-weight: 800; font-variant-numeric: tabular-nums; }
 .fn-v { padding: 5px 10px 7px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line-soft); }
+/* Rounds with no completed games yet are greyed out (still tappable). */
+.tab.future { color: #9AA3B2; background: #F3F5F9; border-style: dashed; font-weight: 500; }
+.tab.future[aria-pressed="true"] { background: #8A94A6; border-color: #8A94A6; border-style: solid; color: #fff; }
