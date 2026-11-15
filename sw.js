@@ -10,7 +10,8 @@ self.addEventListener('push', (e) => {
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || './';
+  let url = (e.notification.data && e.notification.data.url) || './';
+  try { const u = new URL(url, self.registration.scope); u.searchParams.set('from', 'alert'); url = u.href; } catch (err) { /* keep the plain link */ }
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
     for (const w of wins) { if ('focus' in w) { if ('navigate' in w) w.navigate(url); return w.focus(); } }
     return self.clients.openWindow(url);

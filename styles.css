@@ -424,8 +424,7 @@ table.box td.empty { white-space: normal; }
 /* Score moments: ball bounce, gold ripple, "+2" float and a one-line ticker on the live score box */
 .game-hero, .live-card { position: relative; isolation: isolate; }
 .game-lines .gs, .live-lines .s1, .live-lines .s2 { position: relative; }
-.tick { font-size: 13px; color: #fff; background: rgba(255,255,255,.1); border-radius: 8px; padding: 7px 10px; min-height: 36px; line-height: 18px; box-sizing: content-box; }
-@media (min-width: 600px) { .tick { min-height: 18px; } }
+.tick { font-size: 13px; color: #fff; background: rgba(255,255,255,.1); border-radius: 8px; padding: 7px 10px; height: 18px; line-height: 18px; box-sizing: content-box; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tick:empty::before { content: '\00a0'; }
 .tick b { color: #fff; }
 .tick.in { animation: sm-tick .4s ease-out; }
@@ -439,6 +438,19 @@ table.box td.empty { white-space: normal; }
 @keyframes sm-ring { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(4); } }
 @media (prefers-reduced-motion: reduce) { .sm-float, .tick.in { animation-duration: .01ms; } }
 .live-card .tick:empty { display: none; }
+
+/* Final siren: edge flash and result banner when a game you are watching is decided */
+.game-hero, .live-card { overflow: hidden; }
+.live-card.fin .label { opacity: .8; }
+.fs-siren { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2; }
+.fs-siren.go { animation: fs-siren 1.2s ease-out 2; }
+@keyframes fs-siren { 0% { box-shadow: inset 0 0 0 0 var(--red); } 25% { box-shadow: inset 0 0 0 6px var(--red); } 100% { box-shadow: inset 0 0 0 0 transparent; } }
+.fs-banner { position: absolute; left: 0; right: 0; top: 50%; translate: 0 -50%; z-index: 4; background: var(--red); color: var(--fs-ink, #fff); text-align: center; padding: 12px 10px 10px; transform: scaleX(0); transition: transform .45s cubic-bezier(.2,.9,.3,1); pointer-events: none; }
+.fs-banner.show { transform: scaleX(1); }
+.fs-banner .big { font-family: var(--display); font-weight: 800; font-size: 40px; letter-spacing: 2px; text-transform: uppercase; line-height: 1; display: block; }
+.fs-banner small { font-weight: 700; font-size: 13px; display: block; margin-top: 4px; }
+.fs-banner.loss { background: color-mix(in srgb, var(--navy), #fff 16%); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .fs-siren.go { animation: none; } .fs-banner { transition: none; } }
 
 /* Finals: cut line on the ladder and pairings underneath */
 .ladder .ld-seed { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; letter-spacing: .5px; color: var(--red); vertical-align: 1px; }

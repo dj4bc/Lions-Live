@@ -184,12 +184,13 @@
 
   function liveCard(g) {
     const v = view(g);
-    return '<a class="live-card" href="#/game/' + g.id + '">' +
-      '<div class="live-top"><span class="live-dot"></span><span class="label">LIVE</span><span class="div">' + esc(g.divisionShort) + '</span></div>' +
+    const fin = g.status === 'final';
+    return '<a class="live-card' + (fin ? ' fin' : '') + '" href="#/game/' + g.id + '" data-final="' + g.id + '">' +
+      '<div class="live-top">' + (fin ? '' : '<span class="live-dot"></span>') + '<span class="label">' + (fin ? 'FINAL' : 'LIVE') + '</span><span class="div">' + esc(g.divisionShort) + '</span></div>' +
       '<div class="live-lines"><span class="t1">' + logo(v.us, 26) + esc(groupName(v.us) + ' ' + v.us.short) + '</span><span class="s1" data-gs="us" data-g="' + g.id + '">' + esc(shownScore(g, v, 'us')) + '</span>' +
       '<span class="t2">' + logo(v.them, 26) + esc(v.them ? v.them.short : '') + '</span><span class="s2" data-gs="them" data-g="' + g.id + '">' + esc(shownScore(g, v, 'them')) + '</span></div>' +
       (CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
-      '<span class="live-foot">' + esc(g.venueShort + ' · ' + g.court) + ' · tap for the box score</span></a>';
+      '<span class="live-foot">' + esc((fin ? 'Full time · ' : '') + g.venueShort + ' · ' + g.court) + ' · tap for the box score</span></a>';
   }
 
   function myTeamIds() { return String(store.get(STORE_MY_TEAM) || '').split(',').map((v) => parseInt(v, 10)).filter((v) => !isNaN(v)); }
@@ -204,10 +205,11 @@
     const now = Date.now();
     const ages = Array.from(new Set(Array.from(DATA.teams.values()).map((t) => t.age))).sort((a, b) => ageNum(a) - ageNum(b));
     const games = DATA.games.filter(gameMatches);
-    const live = games.filter((g) => g.status === 'live');
+    const justDone = (g) => g.status === 'final' && justFinal.has(g.id) && now - justFinal.get(g.id) < 15 * 60e3;
+    const live = games.filter((g) => g.status === 'live' || justDone(g));
     const horizon = now + 8 * 864e5;
     const upcoming = games.filter((g) => g.status === 'upcoming' && !g.bye && !g.postponed && g.start.getTime() > now - 3 * 3600e3 && g.start.getTime() < horizon);
-    const recent = games.filter((g) => g.status === 'final' && !g.bye && g.start.getTime() > now - 2 * 864e5).reverse();
+    const recent = games.filter((g) => g.status === 'final' && !justDone(g) && !g.bye && g.start.getTime() > now - 2 * 864e5).reverse();
     let html = '';
 
     const mine = myTeamIds().filter((id) => DATA.teams.has(id)).map((id) => DATA.teams.get(id)).sort(teamSort);
@@ -461,7 +463,7 @@
     const v = view(g);
     const status = g.status === 'live' ? '<span class="tag">LIVE</span>' : g.status === 'final' ? '<span class="tag quiet">FINAL</span>' : '<span class="tag quiet">' + esc(dayLabel(g.start).toUpperCase() + ' ' + time(g.start)) + '</span>';
     return '<p style="margin:0"><a href="#/team/' + v.us.id + '">← ' + esc(groupName(v.us) + ' ' + v.us.short) + '</a></p>' +
-      '<section class="game-hero"><div class="next-top">' + status + '<span class="game-meta">' + esc(g.round + ' · ' + fDay.format(g.start) + ' · ' + time(g.start)) + '</span></div>' +
+      '<section class="game-hero" data-final="' + g.id + '"><div class="next-top">' + status + '<span class="game-meta">' + esc(g.round + ' · ' + fDay.format(g.start) + ' · ' + time(g.start)) + '</span></div>' +
       '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs" data-gs="us" data-g="' + g.id + '">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'us')) + '</span>' +
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp" data-gs="them" data-g="' + g.id + '">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'them')) + '</span></div>' +
       (g.status === 'live' && CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
@@ -949,6 +951,36 @@
     } catch (e) { return []; }
   }
 
+  /* ---------- final siren: the moment a game you are watching is decided ---------- */
+  // When a refresh shows a game that was live is now final, its score box (Game day card or box score)
+  // flashes like the siren and a banner opens with the result. It plays once per game; a loss or draw
+  // gets a plain "Full time" banner with no siren.
+  const justFinal = new Map(); // game id -> when this page saw it finish
+  const sirenQueue = new Set();
+  let fromAlert = new URLSearchParams(location.search).get('from') === 'alert';
+  function playSirens() {
+    sirenQueue.forEach((id) => {
+      const boxes = app.querySelectorAll('[data-final="' + id + '"]');
+      if (!boxes.length) return; // play it when the game is next on screen
+      sirenQueue.delete(id);
+      const g = DATA.games.find((x) => x.id === id);
+      if (!g) return;
+      const v = view(g), u = num(v.su), t = num(v.sth), win = u > t;
+      const them = v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
+      const big = win ? (CFG.clubShort || v.us.short) + ' win' : 'Full time';
+      const small = u + '–' + t + (win ? ' · by ' + (u - t) : t > u ? ' · ' + (them ? them + ' by ' : 'lost by ') + (t - u) : ' · drawn');
+      boxes.forEach((box) => {
+        const s = document.createElement('div'); s.className = 'fs-siren'; s.setAttribute('aria-hidden', 'true');
+        const b = document.createElement('div'); b.className = 'fs-banner' + (win ? '' : ' loss'); b.setAttribute('role', 'status');
+        b.innerHTML = '<span class="big">' + esc(big) + '</span><small>' + esc(small) + '</small>';
+        box.append(s, b);
+        if (win) requestAnimationFrame(() => s.classList.add('go'));
+        setTimeout(() => b.classList.add('show'), win ? 700 : 100);
+        setTimeout(() => { b.classList.remove('show'); setTimeout(() => { b.remove(); s.remove(); }, 500); }, win ? 4500 : 3000);
+      });
+    });
+  }
+
   /* ---------- score moments: animate each new basket on the live score box ---------- */
   // Each scraper read gives the running score after every scoring play (flow) and each player's points.
   // Flow entries added since the last read are the new baskets, in order. The scorer is the player on
@@ -1298,6 +1330,7 @@
       if (tr && swipeX) { tr.scrollLeft = swipeX; tr.dispatchEvent(new Event('scroll')); }
     }
     route.sig = sig;
+    playSirens();
     document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === nav));
     const strip = document.getElementById('sponsor-strip');
     if (strip) strip.hidden = !(nav === 'home' && strip.innerHTML);
@@ -1354,7 +1387,17 @@
 
   async function load(silent) {
     try {
+      const wasLive = new Set(DATA ? DATA.games.filter((g) => g.status === 'live').map((g) => g.id) : []);
       DATA = normalise(await fetchAll());
+      DATA.games.forEach((g) => { if (wasLive.has(g.id) && g.status === 'final' && !justFinal.has(g.id)) { justFinal.set(g.id, Date.now()); sirenQueue.add(g.id); } });
+      // Opened by tapping a full-time alert: play the siren for that game once, as if you had watched it finish.
+      if (fromAlert) {
+        fromAlert = false;
+        const m = (location.hash || '').match(/^#\/game\/(\d+)/);
+        const g = m && DATA.games.find((x) => x.id === parseInt(m[1], 10));
+        if (g && g.status === 'final' && Date.now() - g.start.getTime() < 5 * 3600e3) { justFinal.set(g.id, Date.now()); sirenQueue.add(g.id); }
+        try { const u = new URL(location.href); u.searchParams.delete('from'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) { /* fine */ }
+      }
       document.getElementById('updated').textContent = 'Updated ' + time(DATA.fetchedAt);
       const y = window.scrollY;
       route();
