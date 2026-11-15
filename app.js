@@ -186,8 +186,9 @@
     const v = view(g);
     return '<a class="live-card" href="#/game/' + g.id + '">' +
       '<div class="live-top"><span class="live-dot"></span><span class="label">LIVE</span><span class="div">' + esc(g.divisionShort) + '</span></div>' +
-      '<div class="live-lines"><span class="t1">' + logo(v.us, 26) + esc(groupName(v.us) + ' ' + v.us.short) + '</span><span class="s1">' + esc(v.su ?? 0) + '</span>' +
-      '<span class="t2">' + logo(v.them, 26) + esc(v.them ? v.them.short : '') + '</span><span class="s2">' + esc(v.sth ?? 0) + '</span></div>' +
+      '<div class="live-lines"><span class="t1">' + logo(v.us, 26) + esc(groupName(v.us) + ' ' + v.us.short) + '</span><span class="s1" data-gs="us" data-g="' + g.id + '">' + esc(shownScore(g, v, 'us')) + '</span>' +
+      '<span class="t2">' + logo(v.them, 26) + esc(v.them ? v.them.short : '') + '</span><span class="s2" data-gs="them" data-g="' + g.id + '">' + esc(shownScore(g, v, 'them')) + '</span></div>' +
+      (CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
       '<span class="live-foot">' + esc(g.venueShort + ' · ' + g.court) + ' · tap for the box score</span></a>';
   }
 
@@ -461,8 +462,8 @@
     const status = g.status === 'live' ? '<span class="tag">LIVE</span>' : g.status === 'final' ? '<span class="tag quiet">FINAL</span>' : '<span class="tag quiet">' + esc(dayLabel(g.start).toUpperCase() + ' ' + time(g.start)) + '</span>';
     return '<p style="margin:0"><a href="#/team/' + v.us.id + '">← ' + esc(groupName(v.us) + ' ' + v.us.short) + '</a></p>' +
       '<section class="game-hero"><div class="next-top">' + status + '<span class="game-meta">' + esc(g.round + ' · ' + fDay.format(g.start) + ' · ' + time(g.start)) + '</span></div>' +
-      '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs" data-gs="us">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'us')) + '</span>' +
-      '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp" data-gs="them">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'them')) + '</span></div>' +
+      '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs" data-gs="us" data-g="' + g.id + '">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'us')) + '</span>' +
+      '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp" data-gs="them" data-g="' + g.id + '">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'them')) + '</span></div>' +
       (g.status === 'live' && CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
       '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
       (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '"' + (g.status === 'live' ? '' : ' hidden') + '></div>' : '') +
@@ -624,7 +625,23 @@
       '<p class="fine">% is points for divided by points against. Dots show each team\'s last 3 results, newest on the right. From BasketballConnect.</p>';
   }
 
+  // Live cards on Game day read the scraper too, so baskets animate there as well as on the box score.
+  async function pollLiveCards() {
+    clearTimeout(pollLiveCards.t);
+    const ticks = [...app.querySelectorAll('.live-card [data-tick]')];
+    if (!ticks.length || !CFG.foulsBase) return;
+    await Promise.all(ticks.map(async (el) => {
+      const g = DATA.games.find((x) => x.id === parseInt(el.dataset.tick, 10));
+      if (!g || g.status !== 'live') return;
+      try {
+        const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + g.id + '.json', { cache: 'no-store' });
+        if (res.ok) scoreMoments(g, await res.json());
+      } catch (e) { /* keep the score as it is */ }
+    }));
+    pollLiveCards.t = setTimeout(() => { if (!document.hidden && app.querySelector('.live-card [data-tick]')) pollLiveCards(); }, 30e3);
+  }
   async function hydrateStats() {
+    if (app.querySelector('.live-card [data-tick]')) pollLiveCards();
     const ladderEl = app.querySelector('[data-ladder]');
     if (ladderEl) hydrateLadder(ladderEl);
     const foulsEl = app.querySelector('[data-fouls]');
@@ -822,8 +839,7 @@
   }
   function setShown(g, v) {
     ['us', 'them'].forEach((who) => {
-      const el = app.querySelector('.game-hero [data-gs="' + who + '"]');
-      if (el && el.firstChild) el.firstChild.nodeValue = shownScore(g, v, who);
+      app.querySelectorAll('[data-g="' + g.id + '"][data-gs="' + who + '"]').forEach((el) => { if (el.firstChild) el.firstChild.nodeValue = shownScore(g, v, who); });
     });
   }
   function scoreMoments(g, d) {
@@ -833,17 +849,19 @@
     ['team1', 'team2'].forEach((side) => ((d.players || {})[side] || []).forEach((p) => { if (p.pts != null) pts[side + '#' + p.no] = { pts: num(p.pts), p }; }));
     const last = flow.length ? flow[flow.length - 1] : [0, 0, 0];
     const prev = seen.get(g.id);
+    const at = Date.parse(d.updatedAt) || 0;
+    if (prev && at && prev.at && at < prev.at) return; // an older read that arrived late
     const t0 = app.querySelector('[data-tick="' + g.id + '"]');
     // Same read as before (the page re-rendered): leave any replay that is still playing alone.
-    if (prev && flow.length === prev.n && last[1] === prev.s[0] && last[2] === prev.s[1] && t0 && t0.innerHTML) { prev.pts = pts; setShown(g, v); return; }
+    if (prev && flow.length === prev.n && last[1] === prev.s[0] && last[2] === prev.s[1] && t0 && t0.innerHTML) { prev.pts = pts; prev.at = Math.max(prev.at || 0, at); setShown(g, v); return; }
     if (prev) clearTimeout(prev.q);
-    const st = { n: flow.length, s: [last[1], last[2]], shown: [last[1], last[2]], pts, q: null };
+    const st = { n: flow.length, s: [last[1], last[2]], shown: [last[1], last[2]], pts, q: null, at };
     seen.set(g.id, st);
     const tickEl = () => app.querySelector('[data-tick="' + g.id + '"]');
     const lineFor = (s) => { const u = v.home ? s[0] : s[1], t = v.home ? s[1] : s[0];
       return (u > t ? esc(v.us.short) + ' lead ' : u < t ? esc(themShort(v)) + ' lead ' : 'Level at ') + Math.max(u, t) + '–' + Math.min(u, t); };
-    const tick = (html, anim) => { const t = tickEl(); if (!t) return;
-      t.innerHTML = html; if (anim) { t.classList.remove('in'); void t.offsetWidth; t.classList.add('in'); } };
+    const tick = (html, anim) => app.querySelectorAll('[data-tick="' + g.id + '"]').forEach((t) => {
+      t.innerHTML = html; if (anim) { t.classList.remove('in'); void t.offsetWidth; t.classList.add('in'); } });
     // First read, a score correction, or nothing new: show the score with no animation.
     const fresh = prev && flow.length > prev.n && last[1] >= prev.s[0] && last[2] >= prev.s[1];
     if (!fresh) {
@@ -876,7 +894,7 @@
       setShown(g, v);
       if (!evs.length) return;
       const u = evs.filter((e) => e.mine).reduce((x, e) => x + e.n, 0), t = evs.filter((e) => !e.mine).reduce((x, e) => x + e.n, 0);
-      if (!document.hidden) { bump('us', u); bump('them', t); }
+      if (!document.hidden) { bump(g, 'us', u); bump(g, 'them', t); }
       tick('<b>' + (u >= t ? esc(v.us.short) + ' ' + u + '–' + t : esc(themShort(v)) + ' ' + t + '–' + u) + '</b> since the last update · ' + lineFor(st.shown), true);
       return;
     }
@@ -887,7 +905,7 @@
       if (!e || !tickEl()) { st.shown = [last[1], last[2]]; setShown(g, v); return; }
       st.shown = e.after;
       setShown(g, v);
-      bump(e.mine ? 'us' : 'them', e.n);
+      bump(g, e.mine ? 'us' : 'them', e.n);
       const shot = e.n === 3 ? 'a three' : e.n === 2 ? '2' : e.n === 1 ? 'a free throw' : e.n;
       tick('<b>' + esc(e.who || (e.mine ? v.us.short : themShort(v))) + '</b> ' + (e.who && !e.mine && themShort(v) ? '(' + esc(themShort(v)) + ') ' : '') + 'scores ' + shot + ' · ' + lineFor(e.after), true);
       if (i < evs.length) st.q = setTimeout(step, reduceMotion() ? 700 : 1600);
@@ -895,13 +913,14 @@
     step();
   }
   // A ball bounces beside the score, a gold ring ripples out and "+2" floats up.
-  function bump(who, n) {
-    const sc = app.querySelector('.game-hero [data-gs="' + who + '"]');
-    if (!sc || !n) return;
+  function bump(g, who, n) {
+    if (n) app.querySelectorAll('[data-g="' + g.id + '"][data-gs="' + who + '"]').forEach((sc) => bumpOne(sc, n));
+  }
+  function bumpOne(sc, n) {
     const f = document.createElement('span'); f.className = 'sm-float'; f.textContent = '+' + n; f.setAttribute('aria-hidden', 'true'); sc.appendChild(f);
     setTimeout(() => f.remove(), 1400);
     if (reduceMotion()) return;
-    const hero = sc.closest('.game-hero'), h = hero.getBoundingClientRect(), r = sc.getBoundingClientRect();
+    const hero = sc.closest('.game-hero, .live-card'), h = hero.getBoundingClientRect(), r = sc.getBoundingClientRect();
     const rg = document.createRange(); rg.selectNodeContents(sc.firstChild);
     const x = r.right - h.left - rg.getBoundingClientRect().width - 12, y = r.bottom - h.top - 4;
     const bb = document.createElement('div'); bb.className = 'sm-ball'; bb.innerHTML = BALL; bb.style.left = (x - 9) + 'px'; bb.style.top = (y - 18) + 'px';
