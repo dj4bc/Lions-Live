@@ -438,3 +438,4 @@ table.box td.empty { white-space: normal; }
 .sm-ring { position: absolute; width: 14px; height: 14px; border: 3px solid var(--red); border-radius: 50%; pointer-events: none; opacity: 0; animation: sm-ring .9s ease-out .3s; }
 @keyframes sm-ring { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(4); } }
 @media (prefers-reduced-motion: reduce) { .sm-float, .tick.in { animation-duration: .01ms; } }
+.live-card .tick:empty { display: none; }

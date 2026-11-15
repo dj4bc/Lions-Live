@@ -858,7 +858,7 @@
     const st = { n: flow.length, s: [last[1], last[2]], shown: [last[1], last[2]], pts, q: null, at };
     seen.set(g.id, st);
     const tickEl = () => app.querySelector('[data-tick="' + g.id + '"]');
-    const lineFor = (s) => { const u = v.home ? s[0] : s[1], t = v.home ? s[1] : s[0];
+    const lineFor = (s) => { const u = Math.max(v.home ? s[0] : s[1], num(v.su)), t = Math.max(v.home ? s[1] : s[0], num(v.sth)); // never disagree with the box
       return (u > t ? esc(v.us.short) + ' lead ' : u < t ? esc(themShort(v)) + ' lead ' : 'Level at ') + Math.max(u, t) + '–' + Math.min(u, t); };
     const tick = (html, anim) => app.querySelectorAll('[data-tick="' + g.id + '"]').forEach((t) => {
       t.innerHTML = html; if (anim) { t.classList.remove('in'); void t.offsetWidth; t.classList.add('in'); } });
