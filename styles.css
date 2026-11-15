@@ -200,6 +200,8 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 @media (max-width: 720px) { .box-grid { grid-template-columns: minmax(0, 1fr); } table.box td, table.box th { padding: 8px 6px; } }
 .btn.secondary { background: var(--tint); color: var(--navy); }
 .btn.secondary:hover { background: #E1E8F5; color: var(--navy); }
+.tracker-link { gap: 6px; }
+.tracker-link .tl-sub { font-weight: 500; opacity: .7; }
 @media (max-width: 480px) { table.box .opt { display: none; } table.box .pname { min-width: 90px; } }
 
 /* Club logos */
