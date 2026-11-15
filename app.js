@@ -733,7 +733,7 @@
     const anyProj = fx.items.some((x) => x.a.proj || x.b.proj || x.a.pending || x.b.pending);
     const anyEarly = fx.items.some((x) => x.a.early || x.b.early);
     return '<div class="finals-block"><h3>Finals</h3>' + html +
-      '<p class="fine">' + (anyProj ? (fx.poolDone ? 'Teams marked "Locked" are from the final ladder. ' : 'Projected teams come from the ladder as it stands now and can still change. ') +
+      '<p class="fine">' + (anyProj ? (fx.poolDone ? 'Teams marked "Locked" are from the final ladder. ' : fx.items.some((x) => x.a.proj || x.b.proj) ? 'Projected teams come from the ladder as it stands now and can still change. ' : '') +
         (anyEarly && !fx.poolDone ? 'Team names appear ' + fx.projHours + ' hours before each final, or sooner if the ladder is decided. ' : '') +
         'BasketballConnect fills in the real names once each spot is decided. ' : '') + 'Tap a game with our team in it for the box score.</p></div>';
   }
