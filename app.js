@@ -838,7 +838,7 @@
       const v = view(g), u = num(v.su), t = num(v.sth), win = u > t;
       const them = v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
       const big = win ? (CFG.clubShort || v.us.short) + ' win' : 'Full time';
-      const small = u + '–' + t + (win ? ' · by ' + (u - t) : t > u ? ' · ' + them + ' by ' + (t - u) : ' · drawn');
+      const small = u + '–' + t + (win ? ' · by ' + (u - t) : t > u ? ' · ' + (them ? them + ' by ' : 'lost by ') + (t - u) : ' · drawn');
       boxes.forEach((box) => {
         const s = document.createElement('div'); s.className = 'fs-siren'; s.setAttribute('aria-hidden', 'true');
         const b = document.createElement('div'); b.className = 'fs-banner' + (win ? '' : ' loss'); b.setAttribute('role', 'status');
