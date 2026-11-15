@@ -439,3 +439,25 @@ table.box td.empty { white-space: normal; }
 @keyframes sm-ring { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(4); } }
 @media (prefers-reduced-motion: reduce) { .sm-float, .tick.in { animation-duration: .01ms; } }
 .live-card .tick:empty { display: none; }
+
+/* Finals: cut line on the ladder and pairings underneath */
+.ladder .ld-seed { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; letter-spacing: .5px; color: var(--red); vertical-align: 1px; }
+.ladder tr.ld-cut td { border-top: 2px dashed var(--red); }
+.finals-block { border-top: 1px solid var(--line); padding: 12px 14px 0; display: flex; flex-direction: column; gap: 10px; }
+.finals-block h3 { margin: 0; font-family: var(--display); font-size: 16px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.finals-block .fine { padding: 0 0 12px; }
+.fn-game { display: block; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; color: inherit; text-decoration: none; }
+a.fn-game:hover { border-color: var(--blue); color: inherit; }
+.fn-h { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--tint); font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+.fn-live { color: #C0261B; }
+.fn-live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #FF4D5A; margin-right: 5px; vertical-align: 1px; animation: pulse 1.6s ease-in-out infinite; }
+.fn-t { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 10px; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.fn-t.me { background: color-mix(in srgb, var(--red) 14%, #fff); font-weight: 700; }
+.fn-t.pending .fn-name > span { color: var(--muted); font-style: italic; }
+.fn-seed { font-family: var(--display); font-weight: 800; color: var(--muted); text-align: center; }
+.fn-name { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+.fn-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.fn-name small { flex-basis: 100%; font-size: 12px; color: var(--muted); font-weight: 400; }
+.fn-proj { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); border: 1px dashed var(--line); border-radius: 4px; padding: 0 5px; }
+.fn-score { font-weight: 800; font-variant-numeric: tabular-nums; }
+.fn-v { padding: 5px 10px 7px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line-soft); }
