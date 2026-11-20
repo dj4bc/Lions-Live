@@ -52,6 +52,9 @@ window.LIONS_CONFIG = {
   foulsBase: 'https://fouls.adamforb.es',
   // Game alerts (web push) service on the Linode. Leave empty to hide the alerts switch.
   pushBase: 'https://fouls.adamforb.es/push',
+  // Team stat tracker (coaches tap team stats live). Runs on the Hoops Live club portal; each team has a PIN.
+  trackerBase: 'https://portal.adamforb.es',
+  trackerClub: 'lions',
   timeZone: 'Australia/Adelaide',
   // How often to refresh while any Lions game is live (milliseconds).
   liveRefreshMs: 60000
