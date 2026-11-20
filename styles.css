@@ -136,6 +136,13 @@ a.row:hover { background: #F8FAFD; color: inherit; }
 .team-hero .div { font-size: 13px; color: var(--head-sub); }
 .star { margin-left: auto; white-space: nowrap; height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #5874AE; background: transparent; color: #fff; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .star[aria-pressed="true"] { background: #fff; color: var(--blue); border-color: #fff; }
+.hero-btns { margin-left: auto; display: flex; flex-direction: column; gap: 8px; flex: none; }
+.team-hero-top:has(.hero-btns) { flex-wrap: nowrap; }
+.team-hero-top:has(.hero-btns) .team-hero-name { flex: 1; min-width: 0; }
+.hero-btns .star { margin-left: 0; justify-content: center; }
+.hero-btns > * { width: 100%; box-sizing: border-box; }
+.coach-btn { height: 44px; padding: 0 14px; border-radius: 10px; background: var(--red); border: 1px solid var(--red); color: #fff; font-weight: 600; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; white-space: nowrap; }
+.coach-btn:hover { background: #A0141D; color: #fff; }
 .hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .hero-stat { background: var(--navy); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
 .hero-stat span { font-size: 12px; color: var(--head-sub); }
@@ -200,8 +207,6 @@ table.box tfoot td { font-weight: 600; border-bottom: none; background: var(--ti
 @media (max-width: 720px) { .box-grid { grid-template-columns: minmax(0, 1fr); } table.box td, table.box th { padding: 8px 6px; } }
 .btn.secondary { background: var(--tint); color: var(--navy); }
 .btn.secondary:hover { background: #E1E8F5; color: var(--navy); }
-.tracker-link { gap: 6px; }
-.tracker-link .tl-sub { font-weight: 500; opacity: .7; }
 @media (max-width: 480px) { table.box .opt { display: none; } table.box .pname { min-width: 90px; } }
 
 /* Club logos */

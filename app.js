@@ -156,6 +156,7 @@
     ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g.lat + ',' + g.lng)
     : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g.venue);
   const pin = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle></svg>';
+  const toolsIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"></path></svg>';
   const starIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 17.3l-6.2 3.6 1.6-7-5.4-4.7 7.1-.6L12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7z"></path></svg>';
 
   function opponentText(v) {
@@ -372,11 +373,11 @@
 
     let html = '<p style="margin:0"><a href="#/teams">← All teams</a></p><div class="team-layout"><div style="display:flex;flex-direction:column;gap:20px">' +
       '<section class="team-hero"><div class="team-hero-top"><img src="shield.png?v=2" alt=""><div class="team-hero-name"><div class="age">' + esc(groupName(t)) + '</div><h1>' + esc(t.short) + '</h1><div class="div">' + esc(div) + '</div></div>' +
-      '<button class="star" type="button" data-star="' + id + '" aria-pressed="' + mine + '">' + starIcon + (mine ? 'My team' : 'Add to my teams') + '</button></div>' +
+      '<div class="hero-btns"><button class="star" type="button" data-star="' + id + '" aria-pressed="' + mine + '">' + starIcon + (mine ? 'My team' : 'Add to my teams') + '</button>' +
+      trackerLink(t, next && !next.bye ? view(next, id) : null, next) + '</div></div>' +
       '<div class="hero-stats"><div class="hero-stat"><span>Record</span><b>' + rec.W + '–' + rec.L + (rec.D ? '–' + rec.D : '') + '</b></div>' +
       '<div class="hero-stat"><span>For / against</span><b>' + rec.pf + '–' + rec.pa + '</b></div>' +
       '<div class="hero-stat"><span>Avg margin</span><b>' + (rec.avg > 0 ? '+' : '') + rec.avg + '</b></div></div>' + teamSponsor(t) + '</section>';
-    html += trackerLink(t);
 
     if (next) {
       const v = view(next, id);
@@ -926,11 +927,12 @@
       (s.blurb ? '<p>' + esc(s.blurb) + '</p>' : '') + spLink(s, 'sp-cta', esc(s.cta || 'Visit website') + ' →') + '</div></aside>';
   }
   // Team stat tracker on the Hoops Live portal. Coaches unlock it with their team's PIN.
-  function trackerLink(t) {
+  // The next game (opponent, date, match id) goes along so the coach doesn't have to type it.
+  function trackerLink(t, v, g) {
     if (!CFG.trackerBase || !CFG.trackerClub || !t.lions) return '';
     const team = groupName(t) + ' ' + t.short;
-    return '<a class="btn secondary tracker-link" href="' + CFG.trackerBase.replace(/\/$/, '') + '/track/#/t/' + encodeURIComponent(CFG.trackerClub) + '/' + encodeURIComponent(team) + '">' +
-      '<span aria-hidden="true">📋</span> Team stat tracker <span class="tl-sub">· coaches</span></a>';
+    const q = v && g ? '?' + new URLSearchParams({ opp: v.them.short || v.them.name || '', d: dayKey(g.start), m: String(g.id), r: g.round || '' }).toString() : '';
+    return '<a class="coach-btn" href="' + CFG.trackerBase.replace(/\/$/, '') + '/track/#/t/' + encodeURIComponent(CFG.trackerClub) + '/' + encodeURIComponent(team) + q + '" aria-label="Coach: team stat tracker">' + toolsIcon + 'Coach</a>';
   }
   function teamSponsor(t) {
     const s = sponsor(SP.teams && SP.teams[groupName(t) + ' ' + t.short]);
