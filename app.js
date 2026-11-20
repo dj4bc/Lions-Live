@@ -287,7 +287,7 @@
     const range = fDay.format(round.first) === fDay.format(round.last) ? fDay.format(round.first) : fDay.format(round.first) + ' – ' + fDay.format(round.last);
     let html = '<div class="page-head"><div><div class="eyebrow">' + (round.finals === round.games.length ? 'Completed round' : round.finals ? 'In progress' : 'Upcoming round') + '</div>' +
       '<h1 class="page-title">' + esc(round.name) + '</h1><div class="page-sub">' + esc(range) + ' · ' + round.games.length + ' Lions games</div></div>' +
-      '<div class="tabs" role="group" aria-label="Choose round">' + rounds.map((r) => '<button class="tab" type="button" data-round="' + r.seq + '" aria-pressed="' + (r.seq === seq) + '">' + esc(r.name.replace(/^Round\s*/i, 'R')) + '</button>').join('') + '</div></div>';
+      '<div class="tabs" role="group" aria-label="Choose round">' + rounds.map((r) => '<button class="tab' + (r.finals ? '' : ' future') + '" type="button" data-round="' + r.seq + '" aria-pressed="' + (r.seq === seq) + '"' + (r.finals ? '' : ' title="Not played yet"') + '>' + esc(r.name.replace(/^Round\s*/i, 'R')) + '</button>').join('') + '</div></div>';
 
     html += '<section class="stats" aria-label="Round summary">' +
       '<div class="stat win"><span class="stat-label">Wins</span><span class="stat-value">' + count('W') + '</span></div>' +
