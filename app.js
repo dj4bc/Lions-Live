@@ -376,7 +376,7 @@
       '<div class="hero-stats"><div class="hero-stat"><span>Record</span><b>' + rec.W + '–' + rec.L + (rec.D ? '–' + rec.D : '') + '</b></div>' +
       '<div class="hero-stat"><span>For / against</span><b>' + rec.pf + '–' + rec.pa + '</b></div>' +
       '<div class="hero-stat"><span>Avg margin</span><b>' + (rec.avg > 0 ? '+' : '') + rec.avg + '</b></div></div>' + teamSponsor(t) + '</section>';
-    html += trackerLink(t);
+    html += trackerLink(t, next && !next.bye ? view(next, id) : null, next);
 
     if (next) {
       const v = view(next, id);
@@ -926,10 +926,12 @@
       (s.blurb ? '<p>' + esc(s.blurb) + '</p>' : '') + spLink(s, 'sp-cta', esc(s.cta || 'Visit website') + ' →') + '</div></aside>';
   }
   // Team stat tracker on the Hoops Live portal. Coaches unlock it with their team's PIN.
-  function trackerLink(t) {
+  // The next game (opponent, date, match id) goes along so the coach doesn't have to type it.
+  function trackerLink(t, v, g) {
     if (!CFG.trackerBase || !CFG.trackerClub || !t.lions) return '';
     const team = groupName(t) + ' ' + t.short;
-    return '<a class="btn secondary tracker-link" href="' + CFG.trackerBase.replace(/\/$/, '') + '/track/#/t/' + encodeURIComponent(CFG.trackerClub) + '/' + encodeURIComponent(team) + '">' +
+    const q = v && g ? '?' + new URLSearchParams({ opp: v.them.short || v.them.name || '', d: dayKey(g.start), m: String(g.id), r: g.round || '' }).toString() : '';
+    return '<a class="btn secondary tracker-link" href="' + CFG.trackerBase.replace(/\/$/, '') + '/track/#/t/' + encodeURIComponent(CFG.trackerClub) + '/' + encodeURIComponent(team) + q + '">' +
       '<span aria-hidden="true">📋</span> Team stat tracker <span class="tl-sub">· coaches</span></a>';
   }
   function teamSponsor(t) {
