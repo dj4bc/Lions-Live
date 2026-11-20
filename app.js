@@ -787,7 +787,11 @@
       try {
         let rows = await getStats('m' + id, { matchId: id, comp: g.comp.id }, g.status === 'live' ? 25e3 : 6e5);
         let fromLog = false;
-        if (!rows.length && CFG.foulsBase) { const lr = await logRows(g); if (lr.length) { rows = lr; fromLog = true; } }
+        if (!rows.length && CFG.foulsBase) {
+          // While the game is on, list both full squads from the start and fill in the action log as it comes.
+          const lr = await logRows(g);
+          if (lr.length || g.status === 'live') { rows = await withRoster(g, lr); fromLog = rows.length > 0; }
+        }
         if (!gameEl.isConnected) return;
         if (!rows.length) {
           gameEl.innerHTML = '<div class="notice stats-wait">' + (g.status === 'live'
@@ -796,7 +800,7 @@
         } else {
         const sides = [v.us, v.them].filter(Boolean);
         gameEl.innerHTML = sides.map((t) => boxTable(rows.filter((p) => p.teamId === t.id), groupName(t) + ' ' + (t.lions ? t.short : t.club), t.lions, t)).join('') +
-          '<p class="fine">' + (fromLog ? 'Live from BasketballConnect\'s action log, updated every 45 seconds. ' : '') + 'FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
+          '<p class="fine">' + (fromLog ? 'Live from BasketballConnect\'s action log, updated every 45 seconds. Each squad comes from the players who have played for that team this season, so a player who isn\'t here today still shows 0, and a fill-in appears once they score or foul. ' : '') + 'FT, 2P and 3P are shots made. PF is personal fouls, highlighted at 4. A player on 5 fouls is shown faded.</p>';
         applySorts(gameEl);
         }
       } catch (e) {
@@ -932,6 +936,30 @@
   }
 
   // Player rows built from the scraper's action-log file, used while BasketballConnect's stats feed is still empty.
+  // Each team's squad, taken from its season player stats (BasketballConnect's match lineups aren't public).
+  // Players on the action log are matched by shirt number; the season list gives their full name and
+  // whether they're hidden. Squad members with nothing on the log yet are added with zeros.
+  async function withRoster(g, lr) {
+    const teams = [g.t1, g.t2].filter((t) => t && t.id);
+    const lists = await Promise.all(teams.map((t) => getStats('t' + t.id, { teamId: t.id, comp: g.comp.id }, 30 * 6e4).catch(() => [])));
+    const surname = (n) => String(n || '').trim().split(/\s+/).pop().toLowerCase();
+    const out = lr.map((p) => Object.assign({}, p));
+    teams.forEach((t, i) => {
+      const left = lists[i].filter((s) => s.teamId === t.id);
+      out.filter((p) => p.teamId === t.id).forEach((p) => {
+        const same = left.filter((s) => s.shirt === p.shirt);
+        const s = same.length > 1 ? same.find((x) => !x.hidden && !p.hidden && surname(x.name) === surname(p.name)) || same[0] : same[0];
+        if (!s) return;
+        left.splice(left.indexOf(s), 1);
+        if (s.hidden || p.hidden) { p.hidden = true; p.name = ''; }
+        else if (s.name && (!p.name || surname(s.name) === surname(p.name))) p.name = s.name;
+      });
+      left.forEach((s) => out.push({ teamId: t.id, shirt: s.shirt, name: s.hidden ? '' : s.name, hidden: s.hidden,
+        pts: 0, ft: 0, p2: 0, p3: 0, pf: 0, tf: 0, uf: 0 }));
+    });
+    return out;
+  }
+
   async function logRows(g) {
     try {
       const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + g.id + '.json', { cache: 'no-store' });
