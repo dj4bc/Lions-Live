@@ -8,6 +8,7 @@ A static website for Central Districts Lions results, fixtures and live scores. 
 - **Results** (`#/results/<round>`): pick a round to see wins, losses, the biggest win, and each age group's results. Filter by age and boys/girls.
 - **Teams** (`#/teams`): every Lions team (juniors, YDL and SDL) with their form and record.
 - **Box score** (`#/game/<matchId>`): points, free throws, 2s, 3s and fouls for each player on both teams. It refreshes every 30 seconds during live games. Tap any finished or live game to open it.
+- **Play by play** (game page, under the score): a "Play by play" tab beside "Live fouls". Swipe or tap to switch. It shows the last 3 plays and expands to the whole game with filters. It reads `plays` from the scraper's match JSON and stays hidden until the scraper publishes it: `plays: [{ q, clock, side: 'team1'|'team2', no, player, type: '2pt'|'3pt'|'ft'|'foul'|'timeout', pts, score: [team1, team2] }]`, oldest first.
 - **Team page** (`#/team/<id>`): season player stats (games, points, average, fouls), record, points for and against, next game with directions, results and fixtures. "Add to my teams" pins the team to Game day. Visitors can pin as many teams as they like, saved in their own browser.
 
 ## Player names

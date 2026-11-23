@@ -477,7 +477,9 @@
       (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '"' + (g.status === 'live' ? '' : ' hidden') + '></div>' : '') +
       (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
-        (CFG.foulsBase ? '<section class="card fouls-card" data-fouls="' + g.id + '" hidden></section>' : '') +
+        (CFG.foulsBase ? '<div class="pp" data-pp="' + g.id + '"><div class="pp-tabs" role="tablist"><button type="button" role="tab" class="on" data-pp-tab="0">Play by play<em hidden></em></button><button type="button" role="tab" data-pp-tab="1">' + (g.status === 'live' ? 'Live fouls' : 'Fouls') + '</button><span class="pp-ind"></span></div>' +
+          '<div class="pp-track"><section class="card plays-card" data-plays="' + g.id + '" hidden></section><section class="card fouls-card" data-fouls="' + g.id + '" hidden></section></div>' +
+          '<div class="swipe-dots pp-dots" aria-hidden="true"><button type="button" class="on" tabindex="-1"></button><button type="button" tabindex="-1"></button></div></div>' : '') +
         '<div class="swipe"><div class="swipe-track">' +
         '<section class="card worm-card flow-card" data-flow="' + g.id + '"><div class="flow-head"><h3>Game flow</h3></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
         '<section class="card worm-card" data-worm="' + g.id + '"><div class="card-head"><h3>Quarter by quarter</h3><span class="meta">Points per quarter</span></div><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading…</div></section>' +
@@ -1121,6 +1123,8 @@
     } catch (e) { d = null; }
     if (!el.isConnected) return;
     const lw = app.querySelector('[data-lw="' + id + '"]');
+    const pe = app.querySelector('[data-plays="' + id + '"]');
+    if (pe) { if (d) renderPlays(pe, d, g, view(g)); else pe.hidden = true; }
     if (d) { renderFouls(el, d, g, view(g)); if (lw) renderLiveWorm(lw, d, g, view(g)); if (g.status === 'live') scoreMoments(g, d); } else if (lw) lw.hidden = true;
     if (g.status === 'live') { clearTimeout(hydrateFouls.t); hydrateFouls.t = setTimeout(() => { if (el.isConnected && !document.hidden) hydrateFouls(el); }, 30e3); }
   }
@@ -1216,6 +1220,93 @@
       '<p class="fine">From BasketballConnect\'s live action log. Team fouls reset each quarter.</p>';
   }
 
+  /* ---------- play by play (from the scraper's `plays` list) ---------- */
+  // <foulsBase>/match-<id>.json may carry  plays: [{ q, clock, side: 'team1'|'team2', no, player, type, pts, text, score: [team1, team2] }]
+  // oldest first. type is '2pt' | '3pt' | 'ft' | 'foul' | 'timeout' | anything else. Without plays the tab stays hidden.
+  const ppState = {}, ppSeen = {}, ppRead = {};
+  const PP_LABEL = { '2pt': '2 pointer', '3pt': '3 pointer', ft: 'Free throw', foul: 'Foul', timeout: 'Timeout' };
+  function renderPlays(el, d, g, v) {
+    const all = (Array.isArray(d.plays) ? d.plays : []).filter((p) => p && p.type);
+    if (!all.length) { el.hidden = true; return; }
+    const wasHidden = el.hidden;
+    const st = ppState[g.id] || (ppState[g.id] = { open: false, filter: 'all', q: {} });
+    const rows = all.slice().reverse(); // newest first
+    const total = rows.length;
+    const fresh = ppSeen[g.id] != null && total > ppSeen[g.id] ? total - ppSeen[g.id] : 0;
+    ppSeen[g.id] = total;
+    if (ppRead[g.id] == null) ppRead[g.id] = total;
+    const usName = v.us.short, themName = v.them ? (v.them.ours ? v.them.short : v.them.club) : '';
+    const live = g.status === 'live';
+    const mineOf = (p) => (p.side === 'team1') === !!v.home;
+    const qLab = (q) => (q > 4 ? 'OT' : 'Q' + q);
+    const row = (p, i, noQ) => {
+      const mine = mineOf(p);
+      const nm = !p.player || /^hidden player$/i.test(p.player) ? '' : ' ' + p.player;
+      const who = p.no != null && p.no !== '' ? '#' + p.no + nm : (mine ? usName : themName);
+      const kind = p.type === 'foul' ? 'ff' : p.type === 'timeout' ? 'to' : mine ? 'p' : 'po';
+      const badge = p.type === 'foul' ? 'F' : p.type === 'timeout' ? 'T/O' : '+' + (p.pts || (p.type === '3pt' ? 3 : p.type === 'ft' ? 1 : 2));
+      const sc = Array.isArray(p.score) && p.score.length >= 2 ? (v.home ? p.score[0] + '–' + p.score[1] : p.score[1] + '–' + p.score[0]) : '';
+      const sub = (mine ? '' : themName + ' · ') + (PP_LABEL[p.type] || p.text || 'Play');
+      return '<div class="pp-row' + (i < fresh ? ' fresh' : '') + (mine ? '' : ' opp') + '"><span class="pp-t">' + esc(qLab(p.q || 1)) + '<br>' + esc(p.clock || '') + '</span><span class="pp-bar"></span>' +
+        '<span class="pp-x">' + esc(who) + '<small>' + esc(sub) + '</small></span><span class="pp-k ' + kind + '">' + badge + '</span><span class="pp-sc">' + esc(sc) + '</span></div>';
+    };
+    const filters = [['all', 'All'], ['scores', 'Scores'], ['fouls', 'Fouls'], ['ours', usName + ' only']];
+    const keep = (p) => st.filter === 'scores' ? /^(2pt|3pt|ft)$/.test(p.type) : st.filter === 'fouls' ? p.type === 'foul' : st.filter === 'ours' ? mineOf(p) : true;
+    let body;
+    if (!st.open) {
+      body = rows.slice(0, 3).map(row).join('') + '<button type="button" class="pp-more" data-pp-act="open">Show all plays (' + total + ') ▾</button>';
+    } else {
+      const list = rows.filter(keep), groups = [];
+      list.forEach((p) => { const last = groups[groups.length - 1]; if (last && last.q === (p.q || 1)) last.rows.push(p); else groups.push({ q: p.q || 1, rows: [p] }); });
+      let n = 0;
+      body = '<div class="pp-chips">' + filters.map((f) => '<button type="button" class="pp-chip" aria-pressed="' + (st.filter === f[0]) + '" data-pp-filter="' + f[0] + '">' + esc(f[1]) + '</button>').join('') + '</div>' +
+        (groups.length ? groups.map((gr, i) => {
+          const html = gr.rows.map((p) => row(p, n++, true)).join('');
+          return i === 0 ? '<div class="pp-q">' + qLab(gr.q) + '</div>' + html
+            : '<details class="pp-qd" data-q="' + gr.q + '"' + (st.q[gr.q] ? ' open' : '') + '><summary><b>' + qLab(gr.q) + '</b><span>' + gr.rows.length + (gr.rows.length === 1 ? ' play' : ' plays') + '</span></summary>' + html + '</details>';
+        }).join('') : '<div class="fl-none">No plays match this filter.</div>') +
+        '<button type="button" class="pp-more" data-pp-act="close">Show less ▴</button>';
+    }
+    el.hidden = false;
+    el.innerHTML = '<div class="card-head"><h3>' + (live ? '<span class="alog-dot"></span>' : '') + 'Play by play</h3><span class="meta">' + (live ? 'Live · ' : '') + 'newest first</span></div>' + body +
+      '<p class="fine">From BasketballConnect\'s live action log, updated about every 30 seconds.</p>';
+    el.onclick = (e) => {
+      const t = e.target.closest('[data-pp-act], [data-pp-filter], summary');
+      if (!t) return;
+      if (t.tagName === 'SUMMARY') { const dt = t.parentNode; st.q[dt.dataset.q] = !dt.open; return; }
+      if (t.dataset.ppAct) st.open = t.dataset.ppAct === 'open'; else st.filter = t.dataset.ppFilter;
+      renderPlays(el, d, g, v);
+    };
+    const w = el.closest('.pp');
+    if (w && wasHidden && store.get('lions.ppTab') === 'fouls') requestAnimationFrame(() => { const tr = w.querySelector('.pp-track'); tr.scrollLeft = tr.scrollWidth; });
+    if (w && w._ppSync) w._ppSync();
+  }
+  // Tabs + swipe: Play by play first, Live fouls second. The tab you last used is remembered.
+  function setupPP(w, restoreX) {
+    if (!w || w.dataset.ready) return;
+    w.dataset.ready = '1';
+    const track = w.querySelector('.pp-track'), tabs = [...w.querySelectorAll('[data-pp-tab]')], dots = [...w.querySelectorAll('.pp-dots button')], ind = w.querySelector('.pp-ind');
+    const badge = tabs[0].querySelector('em'), id = w.dataset.pp;
+    let userAt = 0, idx = 0;
+    const sync = () => {
+      const max = track.scrollWidth - track.clientWidth;
+      idx = max > 4 && track.scrollLeft >= max / 2 ? 1 : 0;
+      tabs.forEach((b, j) => { b.classList.toggle('on', j === idx); b.setAttribute('aria-selected', j === idx); });
+      dots.forEach((b, j) => b.classList.toggle('on', j === idx));
+      ind.style.transform = 'translateX(' + idx * 100 + '%)';
+      if (idx === 0) ppRead[id] = ppSeen[id];
+      const n = (ppSeen[id] || 0) - (ppRead[id] || 0);
+      badge.hidden = !(idx === 1 && n > 0); badge.textContent = n + ' new';
+      if (Date.now() - userAt < 1500) store.set('lions.ppTab', idx ? 'fouls' : 'plays');
+    };
+    w._ppSync = sync;
+    track.addEventListener('scroll', () => { cancelAnimationFrame(sync.f); sync.f = requestAnimationFrame(sync); }, { passive: true });
+    ['touchstart', 'pointerdown', 'wheel', 'keydown'].forEach((ev) => track.addEventListener(ev, () => { userAt = Date.now(); }, { passive: true }));
+    tabs.forEach((b, j) => b.addEventListener('click', () => { userAt = Date.now(); track.scrollTo({ left: j ? track.scrollWidth : 0, behavior: 'smooth' }); }));
+    if (restoreX != null) track.scrollLeft = restoreX;
+    sync();
+  }
+
   /* ---------- sortable stat tables ---------- */
   // Tap a column header to sort; tap again to flip. The choice is kept while the page refreshes.
   const sorts = {};
@@ -1308,8 +1399,8 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const w = document.querySelector('.a2hs-sheet-wrap'); if (w) w.remove(); } });
 
   /* ---------- routing ---------- */
-  const HYDRATED = '[data-tick], [data-lw], [data-fouls], [data-flow], [data-worm], [data-game-stats], [data-ladder], [data-team-stats]';
-  const hydKey = (el) => ['tick', 'lw', 'fouls', 'flow', 'worm', 'gameStats', 'ladder', 'teamStats'].map((a) => el.dataset[a] != null ? a + el.dataset[a] : '').join('');
+  const HYDRATED = '[data-tick], [data-lw], [data-fouls], [data-plays], [data-flow], [data-worm], [data-game-stats], [data-ladder], [data-team-stats]';
+  const hydKey = (el) => ['tick', 'lw', 'fouls', 'plays', 'flow', 'worm', 'gameStats', 'ladder', 'teamStats'].map((a) => el.dataset[a] != null ? a + el.dataset[a] : '').join('');
   function route() {
     if (!DATA) return;
     const h = (location.hash || '#/').replace(/^#/, '');
@@ -1325,13 +1416,14 @@
     const sig = h + '|' + (parts[0] === 'game' ? ((DATA.games.find((x) => x.id === parseInt(parts[1], 10)) || {}).status || '') : '');
     const same = route.sig === sig;
     const kept = new Map(), present = new Set();
-    let swipeX = 0;
+    let swipeX = 0, ppX = null;
     if (same) {
       app.querySelectorAll(HYDRATED).forEach((el) => {
         const k = hydKey(el); present.add(k);
         if (!el.querySelector(':scope > .loading')) kept.set(k, { html: el.innerHTML, hidden: el.hidden });
       });
       const tr = app.querySelector('.swipe-track'); if (tr) swipeX = tr.scrollLeft;
+      const pt = app.querySelector('.pp-track'); if (pt) ppX = pt.scrollLeft;
     }
     app.innerHTML = html;
     if (same) {
@@ -1343,6 +1435,7 @@
       const tr = app.querySelector('.swipe-track');
       if (tr && swipeX) { tr.scrollLeft = swipeX; tr.dispatchEvent(new Event('scroll')); }
     }
+    app.querySelectorAll('.pp').forEach((w) => setupPP(w, same ? ppX : null));
     route.sig = sig;
     playSirens();
     document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === nav));

@@ -483,3 +483,42 @@ a.fn-game:hover { border-color: var(--blue); color: inherit; }
 /* Rounds with no completed games yet are greyed out (still tappable). */
 .tab.future { color: #9AA3B2; background: #F3F5F9; border-style: dashed; font-weight: 500; }
 .tab.future[aria-pressed="true"] { background: #8A94A6; border-color: #8A94A6; border-style: solid; color: #fff; }
+
+/* Play by play + fouls (tabs you can also swipe) */
+.pp:not(:has(.card:not([hidden]))) { display: none; }
+.pp-tabs, .pp-dots { display: none; }
+.pp:has(.plays-card:not([hidden])) .pp-tabs { display: flex; }
+.pp:has(.plays-card:not([hidden])) .pp-dots { display: flex; }
+.pp-tabs { position: relative; border-bottom: 2px solid var(--line); margin-bottom: 10px; }
+.pp-tabs button { flex: 1; min-height: 44px; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.pp-tabs button.on { color: var(--navy); }
+.pp-tabs em { font-style: normal; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; border-radius: 9px; padding: 1px 7px; margin-left: 6px; vertical-align: 1px; }
+.pp-ind { position: absolute; left: 0; bottom: -2px; width: 50%; height: 3px; border-radius: 2px; background: var(--red); transition: transform .2s; }
+.pp-track { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; align-items: flex-start; overscroll-behavior-x: contain; }
+.pp-track::-webkit-scrollbar { display: none; }
+.pp-track > .card { flex: 0 0 calc(100% - 22px); scroll-snap-align: start; scroll-snap-stop: always; min-width: 0; }
+.pp-track > .card[hidden] { display: none; }
+.pp:not(:has(.plays-card:not([hidden]))) .pp-track > .card { flex-basis: 100%; }
+.plays-card .card-head h3 { display: flex; align-items: center; gap: 8px; }
+.plays-card .fine { margin: 0; padding: 8px 16px 12px; font-size: 12px; color: var(--muted-2); border-top: 1px solid var(--line-soft); }
+.pp-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-top: 1px solid var(--line-soft); }
+.pp-t { width: 38px; font-size: 12px; line-height: 1.25; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pp-bar { width: 4px; align-self: stretch; min-height: 30px; border-radius: 2px; background: var(--blue); }
+.pp-row.opp .pp-bar { background: var(--silver); }
+.pp-x { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.25; }
+.pp-x small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.pp-k { font-family: var(--display); font-weight: 800; font-size: 17px; min-width: 36px; text-align: center; border-radius: 6px; padding: 1px 6px; }
+.pp-k.p { background: var(--blue); color: #fff; }
+.pp-k.po, .pp-k.to { background: #E6E9EF; color: var(--ink-2); }
+.pp-k.ff { border: 2px solid var(--red); color: var(--red); font-size: 14px; }
+.pp-sc { width: 50px; text-align: right; font-family: var(--display); font-weight: 700; font-size: 17px; color: var(--navy); }
+.pp-row.fresh { background: var(--tint); box-shadow: inset 4px 0 0 var(--red); animation: pp-in .5s ease-out; }
+@keyframes pp-in { 0% { transform: translateY(-8px) scale(.98); opacity: 0; } 60% { transform: translateY(2px); opacity: 1; } 100% { transform: none; } }
+.pp-more { display: flex; align-items: center; justify-content: center; width: calc(100% - 32px); min-height: 44px; margin: 10px 16px 12px; border: 0; border-radius: 10px; background: var(--tint); color: var(--navy); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.pp-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 6px; }
+.pp-chip { min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid #CBD3E1; background: #fff; color: var(--navy); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.pp-chip[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+.pp-q, .pp-qd summary { display: flex; justify-content: space-between; padding: 9px 16px 5px; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line-soft); }
+.pp-qd summary { cursor: pointer; min-height: 44px; align-items: center; background: var(--bg); }
+.pp-qd summary span { font-weight: 400; letter-spacing: 0; text-transform: none; }
+@media (prefers-reduced-motion: reduce) { .pp-row.fresh { animation: none; } .pp-ind { transition: none; } }
