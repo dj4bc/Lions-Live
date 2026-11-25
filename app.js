@@ -412,6 +412,7 @@
 
     const later = upcoming.filter((g) => g !== next);
     if (later.length) html += '<section><h2 class="section-title">Fixtures</h2><div class="card">' + later.map((g) => gameRow(g, { teamId: id, link: false, showRound: true, showDate: true, showDivision: false })).join('') + '</div></section>';
+    html += '<section data-finals="' + id + '" hidden></section>';
     return html + '</div></div>';
   }
 
@@ -629,6 +630,9 @@
     const head = wrap && wrap.querySelector('.section-title');
     if (head) head.textContent = 'Ladder · ' + (rows[0].divisionName || g.division || '');
     const fx = fin ? finalsModel(fin, rows) : null;
+    // On a team page the finals get their own section at the bottom of the page.
+    const slot = app.querySelector('[data-finals="' + id + '"]');
+    if (slot) { slot.hidden = !fx; slot.innerHTML = fx ? '<h2 class="section-title">Finals</h2><div class="card ladder-card finals-card">' + finalsHtml(fx, id) + '</div>' : ''; }
     el.innerHTML = '<table class="ladder"><thead><tr><th class="ld-pos">#</th><th class="ld-team">Team</th><th>P</th><th>W</th><th>L</th>' + (hasD ? '<th>D</th>' : '') + '<th>%</th><th class="ld-pts">Pts</th></tr></thead><tbody>' +
       rows.map((r, i) => {
         const cls = [r.id === id ? 'me' : isLions(r.name || '') ? 'club' : '', fx && fx.cut && i === fx.cut ? 'ld-cut' : ''].filter(Boolean).join(' ');
@@ -640,7 +644,7 @@
       }).join('') + '</tbody></table>' +
       '<p class="fine">% is points for divided by points against. Dots show each team\'s last 3 results, newest on the right.' +
       (fx && fx.cut ? ' The dashed line is the finals cut.' : '') + ' From BasketballConnect.</p>' +
-      (fx ? finalsHtml(fx, id) : '');
+      (fx && !slot ? finalsHtml(fx, id) : '');
   }
 
   /* ---------- finals: cut line and pairings under the ladder ---------- */
@@ -1411,8 +1415,8 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const w = document.querySelector('.a2hs-sheet-wrap'); if (w) w.remove(); } });
 
   /* ---------- routing ---------- */
-  const HYDRATED = '[data-tick], [data-lw], [data-fouls], [data-plays], [data-flow], [data-worm], [data-game-stats], [data-ladder], [data-team-stats]';
-  const hydKey = (el) => ['tick', 'lw', 'fouls', 'plays', 'flow', 'worm', 'gameStats', 'ladder', 'teamStats'].map((a) => el.dataset[a] != null ? a + el.dataset[a] : '').join('');
+  const HYDRATED = '[data-tick], [data-lw], [data-fouls], [data-plays], [data-flow], [data-worm], [data-game-stats], [data-ladder], [data-finals], [data-team-stats]';
+  const hydKey = (el) => ['tick', 'lw', 'fouls', 'plays', 'flow', 'worm', 'gameStats', 'ladder', 'finals', 'teamStats'].map((a) => el.dataset[a] != null ? a + el.dataset[a] : '').join('');
   function route() {
     if (!DATA) return;
     const h = (location.hash || '#/').replace(/^#/, '');
