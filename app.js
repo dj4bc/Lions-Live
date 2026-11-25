@@ -938,7 +938,7 @@
   function trackerLink(t, v, g) {
     if (!CFG.trackerBase || !CFG.trackerClub || !t.lions) return '';
     const team = groupName(t) + ' ' + t.short;
-    const q = v && g ? '?' + new URLSearchParams({ opp: v.them.short || v.them.name || '', d: dayKey(g.start), m: String(g.id), r: g.round || '' }).toString() : '';
+    const q = '?' + new URLSearchParams(Object.assign(v && g ? { opp: v.them.short || v.them.name || '', d: dayKey(g.start), m: String(g.id), r: g.round || '' } : {}, { back: location.href })).toString();
     return '<a class="coach-btn" href="' + CFG.trackerBase.replace(/\/$/, '') + '/track/#/t/' + encodeURIComponent(CFG.trackerClub) + '/' + encodeURIComponent(team) + q + '" aria-label="Coach: team stat tracker">' + toolsIcon + 'Coach</a>';
   }
   function teamSponsor(t) {
