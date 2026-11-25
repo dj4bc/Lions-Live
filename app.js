@@ -477,6 +477,7 @@
       (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '"' + (g.status === 'live' ? '' : ' hidden') + '></div>' : '') +
       (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
+        (CFG.foulsBase && g.status === 'live' ? '<div class="stale-note" data-stale="' + g.id + '" hidden></div>' : '') +
         (CFG.foulsBase ? '<div class="pp" data-pp="' + g.id + '"><div class="pp-tabs" role="tablist"><button type="button" role="tab" class="on" data-pp-tab="0">Play by play<em hidden></em></button><button type="button" role="tab" data-pp-tab="1">' + (g.status === 'live' ? 'Live fouls' : 'Fouls') + '</button><span class="pp-ind"></span></div>' +
           '<div class="pp-track"><section class="card plays-card" data-plays="' + g.id + '" hidden></section><section class="card fouls-card" data-fouls="' + g.id + '" hidden></section></div>' +
           '<div class="swipe-dots pp-dots" aria-hidden="true"><button type="button" class="on" tabindex="-1"></button><button type="button" tabindex="-1"></button></div></div>' : '') +
@@ -1020,6 +1021,8 @@
     });
   }
   function scoreMoments(g, d) {
+    const stale = staleNote(d, g);
+    if (stale) { app.querySelectorAll('[data-tick="' + g.id + '"]').forEach((t) => { t.textContent = stale.split('. ')[0]; }); return; }
     const v = view(g);
     const flow = (d.flow || []).filter((f) => Array.isArray(f) && f.length >= 3);
     const pts = {};
@@ -1123,6 +1126,8 @@
     } catch (e) { d = null; }
     if (!el.isConnected) return;
     const lw = app.querySelector('[data-lw="' + id + '"]');
+    const sn = app.querySelector('[data-stale="' + id + '"]');
+    if (sn) { const note = staleNote(d, g); sn.hidden = !note; sn.textContent = note; const tag = app.querySelector('.game-hero .tag'); if (tag && note) tag.textContent = 'NO UPDATES'; }
     const pe = app.querySelector('[data-plays="' + id + '"]');
     if (pe) { if (d) renderPlays(pe, d, g, view(g)); else pe.hidden = true; }
     if (d) { renderFouls(el, d, g, view(g)); if (lw) renderLiveWorm(lw, d, g, view(g)); if (g.status === 'live') scoreMoments(g, d); } else if (lw) lw.hidden = true;
@@ -1220,6 +1225,13 @@
       '<p class="fine">From BasketballConnect\'s live action log. Team fouls reset each quarter.</p>';
   }
 
+  // A live game the scorer has stopped entering. The scraper publishes status 'stale' and changedAt (when the action log last changed).
+  function staleNote(d, g) {
+    if (!d || g.status !== 'live') return '';
+    const at = Date.parse(d.changedAt) || 0;
+    if (d.status !== 'stale' && !(at && Date.now() - at > 20 * 60e3)) return '';
+    return 'No updates ' + (at ? 'since ' + time(new Date(at)) : 'for a while') + '. The scorer may have stopped entering this game.';
+  }
   /* ---------- play by play (from the scraper's `plays` list) ---------- */
   // <foulsBase>/match-<id>.json may carry  plays: [{ q, clock, side: 'team1'|'team2', no, player, type, pts, text, score: [team1, team2] }]
   // oldest first. type is '2pt' | '3pt' | 'ft' | 'foul' | 'timeout' | anything else. Without plays the tab stays hidden.

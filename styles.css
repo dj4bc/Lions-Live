@@ -522,3 +522,6 @@ a.fn-game:hover { border-color: var(--blue); color: inherit; }
 .pp-qd summary { cursor: pointer; min-height: 44px; align-items: center; background: var(--bg); }
 .pp-qd summary span { font-weight: 400; letter-spacing: 0; text-transform: none; }
 @media (prefers-reduced-motion: reduce) { .pp-row.fresh { animation: none; } .pp-ind { transition: none; } }
+
+.stale-note { background: #FFF5DB; border: 1px solid #E8CF8A; color: #6B4700; border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.stale-note[hidden] { display: none; }
