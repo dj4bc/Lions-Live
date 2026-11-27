@@ -89,7 +89,7 @@
         const st = (m.matchStatus || '').toUpperCase();
         const vc = m.venueCourt || {}, v = vc.venue || {};
         const ch = CHANGES.get(m.id) || {};
-        const off = /POSTPONED|CANCEL|ABANDON/.test(st) || ch.type === 'postponed' || ch.type === 'cancelled';
+        const off = /POSTPONED|CANCEL|ABANDON/.test(st) || ch.type === 'postponed' || ch.type === 'cancelled' || ch.type === 'forfeit';
         games.push({
           id: m.id,
           round: rd.name || ('Round ' + ((rd.sequence || 0) + 1)),
@@ -99,7 +99,7 @@
           start: new Date(m.startTime),
           comp,
           postponed: off,
-          offLabel: /CANCEL/.test(st) || ch.type === 'cancelled' ? 'Cancelled' : /ABANDON/.test(st) ? 'Abandoned' : 'Postponed',
+          offLabel: ch.type === 'forfeit' ? 'Forfeit' : /CANCEL/.test(st) || ch.type === 'cancelled' ? 'Cancelled' : /ABANDON/.test(st) ? 'Abandoned' : 'Postponed',
           moved: !off && ch.type === 'moved',
           changeNote: ch.note || '',
           status: st === 'ENDED' ? 'final' : (st && !/POSTPONED|CANCEL|ABANDON/.test(st) ? 'live' : 'upcoming'),
@@ -250,7 +250,7 @@
     if (changed.length) {
       const nOff = changed.filter((g) => g.postponed).length, nMoved = changed.length - nOff;
       html += '<section class="changes" aria-label="Game changes"><div class="changes-head"><h2>Game changes</h2><span>' +
-        [nOff ? nOff + ' postponed' : '', nMoved ? nMoved + ' venue change' + (nMoved === 1 ? '' : 's') : ''].filter(Boolean).join(' · ') + '</span></div>' +
+        [...['Postponed', 'Cancelled', 'Abandoned', 'Forfeit'].map((l) => { const n = changed.filter((g) => g.postponed && g.offLabel === l).length; return n ? n + ' ' + (l === 'Forfeit' ? (n === 1 ? 'forfeit' : 'forfeits') : l.toLowerCase()) : ''; }), nMoved ? nMoved + ' venue change' + (nMoved === 1 ? '' : 's') : ''].filter(Boolean).join(' · ') + '</span></div>' +
         changed.map((g) => {
           const v = view(g);
           const what = g.postponed ? 'Was ' + venueText(g) : 'Now at ' + venueText(g);
@@ -417,7 +417,7 @@
         '<strong>' + esc(fDay.format(next.start) + ' · ' + time(next.start)) + '</strong></div>' +
         (next.bye ? '<div class="next-opp">Bye</div>' :
           '<div><div class="page-sub">' + (v.home ? 'Home v' : 'Away to') + '</div><div class="next-opp">' + logo(v.them, 34) + esc(v.them.short) + '</div></div>' +
-          (off ? '<div class="next-venue"><span>This game has been ' + esc(next.offLabel.toLowerCase()) + '. A new date will show here once BasketballConnect has it.' + (next.changeNote ? ' ' + esc(next.changeNote) : '') + '</span></div>' :
+          (off ? '<div class="next-venue"><span>' + (next.offLabel === 'Forfeit' ? 'This game is a forfeit and will not be played.' : 'This game has been ' + esc(next.offLabel.toLowerCase()) + '. A new date will show here once BasketballConnect has it.') + (next.changeNote ? ' ' + esc(next.changeNote) : '') + '</span></div>' :
           '<div class="next-venue">' + pin + '<span>' + (moved ? '<b>Moved to</b> ' : '') + esc(next.venue + ' · ' + next.court) + (moved && next.changeNote ? ' · ' + esc(next.changeNote) : '') + '</span></div>' +
           (live ? '<a class="btn" href="#/game/' + next.id + '">Live box score</a>' : '') +
           '<a class="btn' + (live ? ' secondary' : '') + '" href="' + mapsUrl(next) + '" target="_blank" rel="noopener">Directions</a>')) +

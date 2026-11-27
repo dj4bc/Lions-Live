@@ -33,12 +33,13 @@ window.LIONS_CONFIG = {
   clubMatch: 'Central Districts Lions',
   // Game changes shown on Game day until each game's start time. BasketballConnect already
   // flags postponed games, so those show by themselves; venue moves are not flagged, so list
-  // them here. id = the BasketballConnect match id. type: 'moved', 'postponed' or 'cancelled'.
+  // them here. id = the BasketballConnect match id. type: 'moved', 'postponed', 'cancelled' or 'forfeit'.
   // note (optional) is shown next to it. Old entries can stay: they stop showing once the game starts.
   gameChanges: [
     { id: 1354540, type: 'moved' }, // 27 Nov U18 Boys Lions 3 v South Adelaide Panthers 4 (no referees)
     { id: 1354425, type: 'moved' }, // 27 Nov U16 Girls Lions 1 v Sturt Sabres 1
-    { id: 1354424, type: 'moved' }  // 27 Nov U18 Girls Lions 1 v Sturt Sabres 1
+    { id: 1354424, type: 'moved' }, // 27 Nov U18 Girls Lions 1 v Sturt Sabres 1
+    { id: 1355120, type: 'forfeit' } // 28 Nov 8:30am U12 Boys Lions 6 v Woodville Warriors 6, Starplex Ct 4 (late forfeit)
   ],
   // Sponsors. Logos live in the sponsors/ folder. Remove an entry (or set it to null) to hide that spot.
   sponsors: {
