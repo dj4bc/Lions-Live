@@ -20,12 +20,12 @@ window.LIONS_CONFIG = {
       ]
     },
     {
-      id: 2892, label: 'YDL', // U21 men, U23 women
+      id: 2892, label: 'YDL', gameMins: 80, // U21 men, U23 women
       sourceUrl: 'https://registration.basketballconnect.com/livescoreSeasonFixture?organisationKey=647be66c-51a1-440c-a213-05532c020016&yearId=9&competitionUniqueKey=308f128f-4983-49de-b670-13fd3bd60f66&divisionId=All',
       teamIds: [156952, 156953, 156954, 156955, 156956, 156957, 156974]
     },
     {
-      id: 2891, label: 'SDL', // senior men and women, plus reserves
+      id: 2891, label: 'SDL', gameMins: 80, // senior men and women, plus reserves
       sourceUrl: 'https://registration.basketballconnect.com/livescoreSeasonFixture?organisationKey=647be66c-51a1-440c-a213-05532c020016&yearId=9&competitionUniqueKey=964e1208-fbb0-424f-9445-8fe1d504f2a6&divisionId=All',
       teamIds: [156881, 156882, 156883, 156884, 156885]
     }
@@ -68,6 +68,10 @@ window.LIONS_CONFIG = {
   trackerBase: 'https://lions.adamforb.es',
   trackerClub: 'lions',
   timeZone: 'Australia/Adelaide',
+  // Normal game length in minutes, tip-off to final siren. A competition can set its own gameMins.
+  // A game still LIVE on BasketballConnect an hour after that shows as UNFINALISED (yellow dot) and
+  // moves from "Live now" to "Waiting on result" on Game day until BasketballConnect ends it.
+  gameMins: 60,
   // How often to refresh while any Lions game is live (milliseconds).
   liveRefreshMs: 60000
 };

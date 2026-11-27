@@ -116,6 +116,13 @@
         });
       });
     }));
+    // Unfinalised: still LIVE on BasketballConnect an hour after its scheduled finish (tip-off plus the
+    // comp's game length). Usually the scorer stopped entering it. It clears once BasketballConnect ends it.
+    const nowMs = Date.now();
+    games.forEach((g) => {
+      const mins = g.comp.gameMins || CFG.gameMins || 60;
+      g.unfinal = g.status === 'live' && nowMs > g.start.getTime() + (mins + 60) * 60e3;
+    });
     games.sort((a, b) => a.start - b.start);
 
     const teams = new Map();
@@ -149,7 +156,7 @@
       if (them && them.lions) res = 'CD';
       else if ((su || 0) === 0 && (sth || 0) === 0) res = 'NR';
       else res = su > sth ? 'W' : su < sth ? 'L' : 'D';
-    } else if (g.status === 'live') res = 'LIVE';
+    } else if (g.status === 'live') res = g.unfinal ? 'UF' : 'LIVE';
     return { g, us, them, su, sth, home, res };
   }
 
@@ -157,8 +164,8 @@
   const ageNum = (a) => (a === 'Senior' ? 90 : a === 'Reserves' ? 91 : parseInt(String(a).replace(/\D/g, ''), 10) || 0);
   const teamSort = (a, b) => ageNum(a.age) - ageNum(b.age) || a.gender.localeCompare(b.gender) || a.short.localeCompare(b.short, undefined, { numeric: true });
 
-  const BADGE_TEXT = { W: 'W', L: 'L', D: 'D', CD: 'CD', NR: 'N/R', BYE: 'BYE', LIVE: 'LIVE' };
-  const BADGE_LABEL = { W: 'Win', L: 'Loss', D: 'Draw', CD: 'Club derby', NR: 'No result', BYE: 'Bye', LIVE: 'Live' };
+  const BADGE_TEXT = { W: 'W', L: 'L', D: 'D', CD: 'CD', NR: 'N/R', BYE: 'BYE', LIVE: 'LIVE', UF: 'TBC' };
+  const BADGE_LABEL = { W: 'Win', L: 'Loss', D: 'Draw', CD: 'Club derby', NR: 'No result', BYE: 'Bye', LIVE: 'Live', UF: 'Unfinalised: waiting on the final result' };
   const badge = (res, sm) => res ? '<span class="badge ' + res + (sm ? ' sm' : '') + '" title="' + BADGE_LABEL[res] + '" aria-label="' + BADGE_LABEL[res] + '">' + BADGE_TEXT[res] + '</span>' : '';
   /* Postponed and moved games stay flagged on Game day until their scheduled start. */
   const changeActive = (g) => (g.postponed || g.moved) && !g.bye && g.status === 'upcoming' && g.start.getTime() > Date.now();
@@ -201,12 +208,12 @@
 
   function liveCard(g) {
     const v = view(g);
-    const fin = g.status === 'final';
-    return '<a class="live-card' + (fin ? ' fin' : '') + '" href="#/game/' + g.id + '" data-final="' + g.id + '">' +
-      '<div class="live-top">' + (fin ? '' : '<span class="live-dot"></span>') + '<span class="label">' + (fin ? 'FINAL' : 'LIVE') + '</span><span class="div">' + esc(g.divisionShort) + '</span></div>' +
+    const fin = g.status === 'final', uf = !fin && g.unfinal;
+    return '<a class="live-card' + (fin ? ' fin' : uf ? ' unfinal' : '') + '" href="#/game/' + g.id + '" data-final="' + g.id + '">' +
+      '<div class="live-top">' + (fin ? '' : '<span class="live-dot"></span>') + '<span class="label">' + (fin ? 'FINAL' : uf ? 'UNFINALISED' : 'LIVE') + '</span><span class="div">' + esc(g.divisionShort) + '</span></div>' +
       '<div class="live-lines"><span class="t1">' + logo(v.us, 26) + esc(groupName(v.us) + ' ' + v.us.short) + '</span><span class="s1" data-gs="us" data-g="' + g.id + '">' + esc(shownScore(g, v, 'us')) + '</span>' +
       '<span class="t2">' + logo(v.them, 26) + esc(v.them ? v.them.short : '') + '</span><span class="s2" data-gs="them" data-g="' + g.id + '">' + esc(shownScore(g, v, 'them')) + '</span></div>' +
-      (CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
+      (uf ? '<div class="uf-note" data-since="' + g.id + '">Waiting on the final result</div>' : CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
       '<span class="live-foot">' + esc((fin ? 'Full time · ' : '') + g.venueShort + ' · ' + g.court) + ' · tap for the box score</span></a>';
   }
 
@@ -223,7 +230,9 @@
     const ages = Array.from(new Set(Array.from(DATA.teams.values()).map((t) => t.age))).sort((a, b) => ageNum(a) - ageNum(b));
     const games = DATA.games.filter(gameMatches);
     const justDone = (g) => g.status === 'final' && justFinal.has(g.id) && now - justFinal.get(g.id) < 15 * 60e3;
-    const live = games.filter((g) => g.status === 'live' || justDone(g));
+    const live = games.filter((g) => (g.status === 'live' && !g.unfinal) || justDone(g));
+    // Unfinalised games from the last two days wait in their own spot until BasketballConnect ends them.
+    const waiting = games.filter((g) => g.unfinal && !g.bye && g.start.getTime() > now - 2 * 864e5);
     const horizon = now + 8 * 864e5;
     const upcoming = games.filter((g) => g.status === 'upcoming' && !g.bye && (g.postponed ? changeActive(g) : g.start.getTime() > now - 3 * 3600e3) && g.start.getTime() < horizon);
     const changed = upcoming.filter(changeActive);
@@ -236,8 +245,8 @@
     if (mine.length) {
       html += '<section><h2 class="section-title">' + (mine.length > 1 ? 'My teams' : 'My team') + '</h2><div class="grid">' + mine.map((t) => {
         const tg = teamGames(t.id);
-        const next = tg.find((g) => g.status !== 'final' && (!g.postponed || changeActive(g)));
-        const last = tg.filter((g) => g.status === 'final').pop();
+        const next = tg.find((g) => g.status !== 'final' && !g.unfinal && (!g.postponed || changeActive(g)));
+        const last = tg.filter((g) => g.status === 'final' || g.unfinal).pop();
         return '<div class="card mine"><div class="card-head"><h3>' + esc(groupName(t) + ' ' + t.short) + '</h3><a class="meta" href="#/team/' + t.id + '">Team page</a>' + bellButton(t) + '</div>' +
           (next ? gameRow(next, { teamId: t.id, showDivision: false }) : '<div class="empty">No more games scheduled.</div>') +
           (last ? gameRow(last, { teamId: t.id, showDivision: false }) : '') + '</div>';
@@ -261,6 +270,8 @@
     }
 
     if (live.length) html += '<section><h2 class="section-title">Live now</h2><div class="live-grid">' + live.map(liveCard).join('') + '</div></section>';
+    if (waiting.length) html += '<section><h2 class="section-title">Waiting on result</h2><div class="live-grid">' + waiting.map(liveCard).join('') + '</div>' +
+      '<p class="fine">' + (waiting.length === 1 ? 'This game' : 'These games') + ' finished over an hour ago but BasketballConnect hasn\'t finalised the result yet. The score is the last one entered. ' + (waiting.length === 1 ? 'It drops' : 'They drop') + ' off here once the result is final.</p></section>';
 
     if (recent.length) {
       html += '<section><h2 class="section-title">Just finished</h2><div class="card">' + recent.slice(0, 8).map((g) => gameRow(g, { showAge: true })).join('') + '</div>' +
@@ -393,10 +404,10 @@
     if (!t) return '<div class="notice"><h2>Team not found</h2><a href="#/teams">All teams</a></div>';
     const rec = teamRecord(id);
     const tg = teamGames(id);
-    const live = tg.find((g) => g.status === 'live');
+    const live = tg.find((g) => g.status === 'live' && !g.unfinal);
     const upcoming = tg.filter((g) => g.status === 'upcoming' && (!g.postponed || changeActive(g)));
     const next = live || upcoming[0];
-    const results = tg.filter((g) => g.status === 'final').reverse();
+    const results = tg.filter((g) => g.status === 'final' || g.unfinal).reverse();
     const div = (next || tg[tg.length - 1] || {}).divisionShort || '';
     const mine = isMyTeam(id);
 
@@ -499,13 +510,13 @@
     const g = DATA.games.find((x) => x.id === id);
     if (!g) return '<div class="notice"><h2>Game not found</h2><a href="#/results">All results</a></div>';
     const v = view(g);
-    const status = g.status === 'live' ? '<span class="tag">LIVE</span>' : g.status === 'final' ? '<span class="tag quiet">FINAL</span>' : '<span class="tag quiet">' + esc(dayLabel(g.start).toUpperCase() + ' ' + time(g.start)) + '</span>';
+    const status = g.unfinal ? '<span class="tag uf">UNFINALISED</span>' : g.status === 'live' ? '<span class="tag">LIVE</span>' : g.status === 'final' ? '<span class="tag quiet">FINAL</span>' : '<span class="tag quiet">' + esc(dayLabel(g.start).toUpperCase() + ' ' + time(g.start)) + '</span>';
     return '<p style="margin:0"><a href="#/team/' + v.us.id + '">← ' + esc(groupName(v.us) + ' ' + v.us.short) + '</a></p>' +
       '<section class="game-hero" data-final="' + g.id + '"><div class="next-top">' + status + '<span class="game-meta">' + esc(g.round + ' · ' + fDay.format(g.start) + ' · ' + time(g.start)) + '</span></div>' +
       '<div class="game-lines"><a href="#/team/' + v.us.id + '" class="gt">' + logo(v.us, 34) + esc(groupName(v.us) + ' ' + v.us.short) + '</a><span class="gs" data-gs="us" data-g="' + g.id + '">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'us')) + '</span>' +
       '<span class="gt opp">' + logo(v.them, 34) + esc(v.them ? (v.them.lions ? v.them.short : v.them.club) : 'Bye') + '</span><span class="gs opp" data-gs="them" data-g="' + g.id + '">' + esc(g.status === 'upcoming' ? '–' : shownScore(g, v, 'them')) + '</span></div>' +
       (g.status === 'live' && CFG.foulsBase ? '<div class="tick" data-tick="' + g.id + '" aria-live="polite"></div>' : '') +
-      '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' ? ' · updates every 30 seconds' : '') + '</div>' +
+      '<div class="game-meta">' + esc([g.divisionShort, g.venue + (g.court ? ' · ' + g.court : '')].filter(Boolean).join(' · ')) + (g.status === 'live' && !g.unfinal ? ' · updates every 30 seconds' : g.unfinal ? ' · waiting on BasketballConnect to finalise the result' : '') + '</div>' +
       (g.status !== 'upcoming' && CFG.foulsBase ? '<div class="lw" data-lw="' + g.id + '"' + (g.status === 'live' ? '' : ' hidden') + '></div>' : '') +
       (g.status !== 'upcoming' && !CFG.foulsBase && matchCentreUrl(g) ? '<a class="alog-btn" href="' + esc(matchCentreUrl(g)) + '" target="_blank" rel="noopener">' + (g.status === 'live' ? '<span class="alog-dot"></span>Live action log and fouls' : 'Action log on BasketballConnect') + ' ↗</a>' : '') + '</section>' +
       (g.status === 'upcoming' ? '<div class="notice">The box score appears here once the game starts.</div>' :
@@ -815,8 +826,34 @@
     }));
     pollLiveCards.t = setTimeout(() => { if (!document.hidden && app.querySelector('.live-card [data-tick]')) pollLiveCards(); }, 30e3);
   }
+  // Unfinalised cards: one scraper read for when the action log last changed, and its last score.
+  function fillSince() {
+    if (!CFG.foulsBase) return;
+    app.querySelectorAll('[data-since]').forEach(async (el) => {
+      const g = DATA.games.find((x) => x.id === parseInt(el.dataset.since, 10));
+      if (!g) return;
+      try {
+        const res = await fetch(CFG.foulsBase.replace(/\/$/, '') + '/match-' + g.id + '.json', { cache: 'no-store' });
+        if (!res.ok) return;
+        const d = await res.json();
+        const at = Date.parse(d.changedAt || d.updatedAt) || 0;
+        if (!el.isConnected) return;
+        if (at) el.textContent = 'No updates since ' + (dayKey(new Date(at)) === todayKey() ? '' : fWeekday.format(new Date(at)) + ' ') + time(new Date(at));
+        const flow = (d.flow || []).filter((f) => Array.isArray(f) && f.length >= 3);
+        const last = flow[flow.length - 1];
+        if (last) {
+          const v = view(g);
+          const t1 = Math.max(num(g.s1), num(last[1])), t2 = Math.max(num(g.s2), num(last[2]));
+          const card = el.closest('.live-card');
+          const s1 = card.querySelector('[data-gs="us"]'), s2 = card.querySelector('[data-gs="them"]');
+          if (s1 && s2) { s1.textContent = v.home ? t1 : t2; s2.textContent = v.home ? t2 : t1; }
+        }
+      } catch (e) { /* keep "Waiting on the final result" */ }
+    });
+  }
   async function hydrateStats() {
     if (app.querySelector('.live-card [data-tick]')) pollLiveCards();
+    if (app.querySelector('[data-since]')) fillSince();
     const ladderEl = app.querySelector('[data-ladder]');
     if (ladderEl) hydrateLadder(ladderEl);
     const foulsEl = app.querySelector('[data-fouls]');
@@ -1162,7 +1199,7 @@
     if (!el.isConnected) return;
     const lw = app.querySelector('[data-lw="' + id + '"]');
     const sn = app.querySelector('[data-stale="' + id + '"]');
-    if (sn) { const note = staleNote(d, g); sn.hidden = !note; sn.textContent = note; const tag = app.querySelector('.game-hero .tag'); if (tag && note) tag.textContent = 'NO UPDATES'; }
+    if (sn) { const note = staleNote(d, g); sn.hidden = !note; sn.textContent = note; const tag = app.querySelector('.game-hero .tag'); if (tag && note && !g.unfinal) tag.textContent = 'NO UPDATES'; }
     const pe = app.querySelector('[data-plays="' + id + '"]');
     if (pe) { if (d) renderPlays(pe, d, g, view(g)); else pe.hidden = true; }
     if (d) { renderFouls(el, d, g, view(g)); if (lw) renderLiveWorm(lw, d, g, view(g)); if (g.status === 'live') scoreMoments(g, d); } else if (lw) lw.hidden = true;
@@ -1541,7 +1578,8 @@
 
   async function load(silent) {
     try {
-      const wasLive = new Set(DATA ? DATA.games.filter((g) => g.status === 'live').map((g) => g.id) : []);
+      // Unfinalised games are left out, so no siren plays when one is finally ended hours later.
+      const wasLive = new Set(DATA ? DATA.games.filter((g) => g.status === 'live' && !g.unfinal).map((g) => g.id) : []);
       DATA = normalise(await fetchAll());
       DATA.games.forEach((g) => { if (wasLive.has(g.id) && g.status === 'final' && !justFinal.has(g.id)) { justFinal.set(g.id, Date.now()); sirenQueue.add(g.id); } });
       // Opened by tapping a full-time alert: play the siren for that game once, as if you had watched it finish.
@@ -1562,7 +1600,7 @@
       }
     }
     clearTimeout(refreshTimer);
-    const anyLive = DATA && DATA.games.some((g) => g.status === 'live');
+    const anyLive = DATA && DATA.games.some((g) => g.status === 'live' && !g.unfinal);
     const soon = DATA && DATA.games.some((g) => g.status === 'upcoming' && !g.postponed && Math.abs(g.start - Date.now()) < 3600e3);
     refreshTimer = setTimeout(() => { if (!document.hidden) load(true); else refreshTimer = null; }, anyLive || soon ? CFG.liveRefreshMs : 10 * 60e3);
   }
