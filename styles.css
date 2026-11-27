@@ -527,3 +527,22 @@ a.fn-game:hover { border-color: var(--blue); color: inherit; }
 
 .stale-note { background: #FFF5DB; border: 1px solid #E8CF8A; color: #6B4700; border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 600; line-height: 1.35; }
 .stale-note[hidden] { display: none; }
+
+/* Postponed and moved games (Game day changes) */
+.chg { flex: 0 0 auto; font-size: 11px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; border-radius: 6px; padding: 4px 7px; white-space: nowrap; }
+.chg.off { background: var(--red); color: #fff; }
+.chg.moved { background: #F4B400; color: #1A1A1A; }
+.row-title .chg { font-size: 10px; padding: 2px 6px; vertical-align: 1px; }
+.row.is-off .row-title, .row.is-off .row-sub { text-decoration: line-through; text-decoration-color: rgba(190, 24, 35, 0.6); opacity: 0.7; }
+.row.is-off .logo, .row.is-off img { opacity: 0.5; }
+.row.is-moved { background: #FFF8E1; }
+.row.is-moved .row-sub b { color: #8A5A00; }
+.changes { background: var(--card); border: 2px solid var(--red); border-radius: 14px; overflow: hidden; }
+.changes-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 12px 16px; background: var(--red); color: #fff; }
+.changes-head h2 { margin: 0; font-size: 16px; }
+.changes-head span { font-size: 13px; font-weight: 600; }
+.changes .row:last-child { border-bottom: 0; }
+.tag.off { background: var(--red); color: #fff; }
+.tag.moved { background: #F4B400; color: #1A1A1A; }
+.next-card.is-moved { border-color: #F4B400; }
+.next-card.is-off .next-opp { text-decoration: line-through; opacity: 0.7; }

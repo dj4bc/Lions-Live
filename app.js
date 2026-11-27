@@ -76,6 +76,9 @@
     return parts.filter((p) => !/^grading season$/i.test(p)).map((p) => p.replace(/^Division /, 'Div ')).join(' · ');
   }
 
+  // Manual game changes from config.js (venue moves are not flagged by BasketballConnect).
+  const CHANGES = new Map((CFG.gameChanges || []).map((c) => [Number(c.id), c]));
+
   function normalise(sets) {
     const games = [];
     sets.forEach(({ comp, json }) => (json.rounds || []).forEach((rd) => {
@@ -85,6 +88,8 @@
         if (!((t1 && t1.lions) || (t2 && t2.lions))) return;
         const st = (m.matchStatus || '').toUpperCase();
         const vc = m.venueCourt || {}, v = vc.venue || {};
+        const ch = CHANGES.get(m.id) || {};
+        const off = /POSTPONED|CANCEL|ABANDON/.test(st) || ch.type === 'postponed' || ch.type === 'cancelled';
         games.push({
           id: m.id,
           round: rd.name || ('Round ' + ((rd.sequence || 0) + 1)),
@@ -93,7 +98,10 @@
           divisionShort: [comp.label === 'Juniors' ? '' : comp.label, shortDivision(rd.division && rd.division.name)].filter(Boolean).join(' · '),
           start: new Date(m.startTime),
           comp,
-          postponed: /POSTPONED|CANCEL|ABANDON/.test(st),
+          postponed: off,
+          offLabel: /CANCEL/.test(st) || ch.type === 'cancelled' ? 'Cancelled' : /ABANDON/.test(st) ? 'Abandoned' : 'Postponed',
+          moved: !off && ch.type === 'moved',
+          changeNote: ch.note || '',
           status: st === 'ENDED' ? 'final' : (st && !/POSTPONED|CANCEL|ABANDON/.test(st) ? 'live' : 'upcoming'),
           t1, t2,
           s1: m.team1Score, s2: m.team2Score,
@@ -152,6 +160,10 @@
   const BADGE_TEXT = { W: 'W', L: 'L', D: 'D', CD: 'CD', NR: 'N/R', BYE: 'BYE', LIVE: 'LIVE' };
   const BADGE_LABEL = { W: 'Win', L: 'Loss', D: 'Draw', CD: 'Club derby', NR: 'No result', BYE: 'Bye', LIVE: 'Live' };
   const badge = (res, sm) => res ? '<span class="badge ' + res + (sm ? ' sm' : '') + '" title="' + BADGE_LABEL[res] + '" aria-label="' + BADGE_LABEL[res] + '">' + BADGE_TEXT[res] + '</span>' : '';
+  /* Postponed and moved games stay flagged on Game day until their scheduled start. */
+  const changeActive = (g) => (g.postponed || g.moved) && !g.bye && g.status === 'upcoming' && g.start.getTime() > Date.now();
+  const changePill = (g) => g.postponed ? '<span class="chg off">' + esc(g.offLabel) + '</span>' : g.moved ? '<span class="chg moved">Venue change</span>' : '';
+  const venueText = (g) => g.venueShort + (g.court ? ' · ' + g.court : '');
   const mapsUrl = (g) => g.lat && g.lng
     ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g.lat + ',' + g.lng)
     : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g.venue);
@@ -173,16 +185,17 @@
     if (opts.showRound) sub.push(g.round);
     if (opts.showDivision !== false && g.divisionShort) sub.push(g.divisionShort);
     if (!g.bye) sub.push(g.venueShort + (g.court ? ' ' + g.court.replace('Court ', 'Ct ') : ''));
+    if (g.postponed && g.status === 'upcoming' && !opts.showDate) sub.push(dayLabel(g.start) + ' ' + time(g.start));
     if (g.status !== 'upcoming' || opts.showDate) sub.push(g.status === 'upcoming' ? fDay.format(g.start) : whenShort(g.start));
     let right = '';
     if (g.bye) right = badge('BYE');
-    else if (g.postponed) right = '<span class="when">Postponed</span>';
+    else if (g.postponed) right = changePill(g);
     else if (g.status === 'upcoming') right = '<span class="when">' + esc(opts.showDate ? time(g.start) : dayLabel(g.start) + '<br>' + time(g.start)).replace('&lt;br&gt;', '<br>') + '</span>';
     else right = '<span class="score">' + esc(v.su) + '–' + esc(v.sth) + '</span>' + badge(v.res);
     const href = (!g.bye && g.status !== 'upcoming') ? '#/game/' + g.id : '#/team/' + v.us.id;
     const tag = opts.link === false ? 'div' : 'a';
     return '<' + tag + ' class="row"' + (tag === 'a' ? ' href="' + href + '"' : '') + '>' +
-      (g.bye ? '' : logo(v.them, 30)) + '<div class="row-main"><span class="row-title">' + esc(title) + ' <span class="vs">' + esc(opponentText(v)) + '</span></span>' +
+      (g.bye ? '' : logo(v.them, 30)) + '<div class="row-main"><span class="row-title">' + esc(title) + ' <span class="vs">' + esc(opponentText(v)) + '</span>' + (g.moved && changeActive(g) ? ' ' + changePill(g) : '') + '</span>' +
       '<span class="row-sub">' + esc(sub.join(' · ')) + '</span></div>' + right + '</' + tag + '>';
   }
 
@@ -212,7 +225,9 @@
     const justDone = (g) => g.status === 'final' && justFinal.has(g.id) && now - justFinal.get(g.id) < 15 * 60e3;
     const live = games.filter((g) => g.status === 'live' || justDone(g));
     const horizon = now + 8 * 864e5;
-    const upcoming = games.filter((g) => g.status === 'upcoming' && !g.bye && !g.postponed && g.start.getTime() > now - 3 * 3600e3 && g.start.getTime() < horizon);
+    const upcoming = games.filter((g) => g.status === 'upcoming' && !g.bye && (g.postponed ? changeActive(g) : g.start.getTime() > now - 3 * 3600e3) && g.start.getTime() < horizon);
+    const changed = upcoming.filter(changeActive);
+    const playing = upcoming.filter((g) => !g.postponed);
     // Finals with no score recorded (shown as N/R) are left out here; they still show in Results.
     const recent = games.filter((g) => g.status === 'final' && !justDone(g) && !g.bye && !noResult(g) && g.start.getTime() > now - 2 * 864e5).reverse();
     let html = '';
@@ -221,7 +236,7 @@
     if (mine.length) {
       html += '<section><h2 class="section-title">' + (mine.length > 1 ? 'My teams' : 'My team') + '</h2><div class="grid">' + mine.map((t) => {
         const tg = teamGames(t.id);
-        const next = tg.find((g) => g.status !== 'final' && !g.postponed);
+        const next = tg.find((g) => g.status !== 'final' && (!g.postponed || changeActive(g)));
         const last = tg.filter((g) => g.status === 'final').pop();
         return '<div class="card mine"><div class="card-head"><h3>' + esc(groupName(t) + ' ' + t.short) + '</h3><a class="meta" href="#/team/' + t.id + '">Team page</a>' + bellButton(t) + '</div>' +
           (next ? gameRow(next, { teamId: t.id, showDivision: false }) : '<div class="empty">No more games scheduled.</div>') +
@@ -230,7 +245,20 @@
     }
 
     html += '<div class="page-head"><div><div class="eyebrow">' + esc(fLongDay.format(new Date())) + '</div><h1 class="page-title">Game day</h1>' +
-      '<div class="page-sub">' + (live.length ? live.length + ' live · ' : '') + upcoming.length + (upcoming.length === 1 ? ' Lions game' : ' Lions games') + ' in the next week</div></div></div>' + filterChips(ages);
+      '<div class="page-sub">' + (live.length ? live.length + ' live · ' : '') + playing.length + (playing.length === 1 ? ' Lions game' : ' Lions games') + ' in the next week</div></div></div>' + filterChips(ages);
+
+    if (changed.length) {
+      const nOff = changed.filter((g) => g.postponed).length, nMoved = changed.length - nOff;
+      html += '<section class="changes" aria-label="Game changes"><div class="changes-head"><h2>Game changes</h2><span>' +
+        [nOff ? nOff + ' postponed' : '', nMoved ? nMoved + ' venue change' + (nMoved === 1 ? '' : 's') : ''].filter(Boolean).join(' · ') + '</span></div>' +
+        changed.map((g) => {
+          const v = view(g);
+          const what = g.postponed ? 'Was ' + venueText(g) : 'Now at ' + venueText(g);
+          return '<a class="row" href="#/team/' + v.us.id + '"><div class="age-tile"><b>' + esc(v.us.tile) + '</b><span>' + esc(v.us.sex.toUpperCase()) + '</span></div>' +
+            '<div class="row-main"><span class="row-title">' + esc(v.us.short) + ' <span class="vs">' + esc(opponentText(v)) + '</span></span>' +
+            '<span class="row-sub">' + esc(dayLabel(g.start) + ' ' + time(g.start) + ' · ' + what + (g.changeNote ? ' · ' + g.changeNote : '')) + '</span></div>' + changePill(g) + '</a>';
+        }).join('') + '</section>';
+    }
 
     if (live.length) html += '<section><h2 class="section-title">Live now</h2><div class="live-grid">' + live.map(liveCard).join('') + '</div></section>';
 
@@ -256,9 +284,10 @@
           html += '<section><div class="slot-head"><h3>' + esc(t) + '</h3><span>' + games.length + (games.length === 1 ? ' game' : ' games') + '</span></div><div class="card">' +
             games.map((g) => {
               const v = view(g);
-              return '<a class="row" href="#/team/' + v.us.id + '">' + logo(v.them, 30) + '<div class="age-tile"><b>' + esc(v.us.tile) + '</b><span>' + esc(v.us.sex.toUpperCase()) + '</span></div>' +
+              const chg = changeActive(g);
+              return '<a class="row' + (g.postponed ? ' is-off' : g.moved && chg ? ' is-moved' : '') + '" href="#/team/' + v.us.id + '">' + logo(v.them, 30) + '<div class="age-tile"><b>' + esc(v.us.tile) + '</b><span>' + esc(v.us.sex.toUpperCase()) + '</span></div>' +
                 '<div class="row-main"><span class="row-title">' + esc(v.us.short) + ' <span class="vs">' + esc(opponentText(v)) + '</span></span>' +
-                '<span class="row-sub">' + esc(g.venueShort + ' · ' + g.court) + '</span></div></a>';
+                '<span class="row-sub">' + (g.moved && chg ? '<b>Now at ' + esc(venueText(g)) + '</b>' : esc(g.venueShort + ' · ' + g.court)) + '</span></div>' + (chg ? changePill(g) : '') + '</a>';
             }).join('') + '</div></section>';
         });
         html += '</div>';
@@ -365,7 +394,7 @@
     const rec = teamRecord(id);
     const tg = teamGames(id);
     const live = tg.find((g) => g.status === 'live');
-    const upcoming = tg.filter((g) => g.status === 'upcoming');
+    const upcoming = tg.filter((g) => g.status === 'upcoming' && (!g.postponed || changeActive(g)));
     const next = live || upcoming[0];
     const results = tg.filter((g) => g.status === 'final').reverse();
     const div = (next || tg[tg.length - 1] || {}).divisionShort || '';
@@ -382,14 +411,16 @@
     if (next) {
       const v = view(next, id);
       const isToday = dayKey(next.start) === todayKey();
-      html += '<section><h2 class="section-title">' + (live ? 'Live now' : 'Next game · ' + esc(next.round)) + '</h2><div class="next-card">' +
-        '<div class="next-top"><span class="tag' + (live || isToday ? '' : ' quiet') + '">' + (live ? 'LIVE ' + esc(v.su ?? 0) + '–' + esc(v.sth ?? 0) : isToday ? 'TODAY' : esc(dayLabel(next.start).toUpperCase())) + '</span>' +
+      const off = !live && next.postponed, moved = !live && next.moved && changeActive(next);
+      html += '<section><h2 class="section-title">' + (live ? 'Live now' : 'Next game · ' + esc(next.round)) + '</h2><div class="next-card' + (off ? ' is-off' : moved ? ' is-moved' : '') + '">' +
+        '<div class="next-top"><span class="tag' + (off ? ' off' : moved ? ' moved' : live || isToday ? '' : ' quiet') + '">' + (live ? 'LIVE ' + esc(v.su ?? 0) + '–' + esc(v.sth ?? 0) : off ? esc(next.offLabel.toUpperCase()) : moved ? 'VENUE CHANGE' : isToday ? 'TODAY' : esc(dayLabel(next.start).toUpperCase())) + '</span>' +
         '<strong>' + esc(fDay.format(next.start) + ' · ' + time(next.start)) + '</strong></div>' +
         (next.bye ? '<div class="next-opp">Bye</div>' :
           '<div><div class="page-sub">' + (v.home ? 'Home v' : 'Away to') + '</div><div class="next-opp">' + logo(v.them, 34) + esc(v.them.short) + '</div></div>' +
-          '<div class="next-venue">' + pin + '<span>' + esc(next.venue + ' · ' + next.court) + '</span></div>' +
+          (off ? '<div class="next-venue"><span>This game has been ' + esc(next.offLabel.toLowerCase()) + '. A new date will show here once BasketballConnect has it.' + (next.changeNote ? ' ' + esc(next.changeNote) : '') + '</span></div>' :
+          '<div class="next-venue">' + pin + '<span>' + (moved ? '<b>Moved to</b> ' : '') + esc(next.venue + ' · ' + next.court) + (moved && next.changeNote ? ' · ' + esc(next.changeNote) : '') + '</span></div>' +
           (live ? '<a class="btn" href="#/game/' + next.id + '">Live box score</a>' : '') +
-          '<a class="btn' + (live ? ' secondary' : '') + '" href="' + mapsUrl(next) + '" target="_blank" rel="noopener">Directions</a>') +
+          '<a class="btn' + (live ? ' secondary' : '') + '" href="' + mapsUrl(next) + '" target="_blank" rel="noopener">Directions</a>')) +
         '</div></section>';
     }
     html += '<section data-ladder-wrap><h2 class="section-title">Ladder</h2><div class="card ladder-card" data-ladder="' + id + '"><div class="loading small"><span class="spinner" aria-hidden="true"></span> Loading ladder…</div></div></section>';
