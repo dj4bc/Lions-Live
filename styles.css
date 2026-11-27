@@ -546,3 +546,10 @@ a.fn-game:hover { border-color: var(--blue); color: inherit; }
 .tag.moved { background: #F4B400; color: #1A1A1A; }
 .next-card.is-moved { border-color: #F4B400; }
 .next-card.is-off .next-opp { text-decoration: line-through; opacity: 0.7; }
+
+/* Unfinalised: still LIVE on BasketballConnect an hour past its scheduled finish */
+.live-card.unfinal .live-dot { background: #F4B400; animation: none; }
+.live-card.unfinal .label { color: #FFD45C; }
+.uf-note { font-size: 13px; font-weight: 600; color: #FFD45C; }
+.badge.UF { background: #F4B400; color: #1A1A1A; font-size: 10px; }
+.tag.uf { background: #F4B400; color: #1A1A1A; }
