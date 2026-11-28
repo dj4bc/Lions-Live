@@ -1441,6 +1441,30 @@
   const STORE_A2HS = 'lions.a2hsLater';
   let installPrompt = null;
   const isAndroid = () => /Android/i.test(navigator.userAgent);
+  // Facebook, Messenger and Instagram open links in their own in-app browser, which can't add to home screen.
+  const inAppName = () => { const ua = navigator.userAgent; if (/Messenger/i.test(ua)) return 'Messenger'; if (/Instagram/i.test(ua)) return 'Instagram'; if (/FBAN|FBAV|FB_IAB|FBIOS|FB4A/i.test(ua)) return 'Facebook'; return ''; };
+  const browserName = () => isIOS() ? 'Safari' : 'Chrome';
+  const COMPASS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M15.5 8.5l-2 5-5 2 2-5z"></path></svg>';
+  const COPY = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>';
+  function openInBrowser() {
+    const url = location.origin + location.pathname;
+    if (isAndroid()) {
+      location.href = 'intent://' + location.host + location.pathname + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
+    } else {
+      location.href = 'x-safari-' + location.href; // iOS 17+ opens this in Safari; older versions ignore it
+    }
+  }
+  async function copyLink() {
+    const url = location.origin + location.pathname;
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch (err) {
+      const ta = document.createElement('textarea'); ta.value = url; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      ta.remove();
+    }
+    toast(ok ? '<span>Link copied. Open ' + browserName() + ' and paste it in the address bar.</span>' : '<span>Couldn\'t copy. The link is ' + esc(url) + '</span>');
+  }
   function installBanner() {
     if (isStandalone()) return '';
     const later = parseInt(store.get(STORE_A2HS) || '0', 10);
@@ -1449,7 +1473,7 @@
     const phone = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"></rect><path d="M11 18h2"></path></svg>';
     return '<section class="a2hs" aria-label="Add to home screen"><div class="a2hs-top"><img src="icon-192.png" alt="" width="56" height="56"><div><h2>' + esc(SITE_NAME) + ' on your phone</h2>' +
       '<p>Scores, fixtures and venues one tap away, just like an app.</p></div></div>' +
-      '<button class="a2hs-go" type="button" data-install>' + phone + 'Add to home screen</button>' +
+      '<button class="a2hs-go" type="button" data-install>' + (inAppName() ? COMPASS + 'Open in ' + browserName() : phone + 'Add to home screen') + '</button>' +
       '<button class="a2hs-later" type="button" data-install-later>Not now</button></section>';
   }
   function installSheet() {
@@ -1458,8 +1482,24 @@
     const steps = isIOS()
       ? ['Tap the <b>Share</b> button ' + share + ' in the browser toolbar', 'Scroll down and choose <b>Add to Home Screen</b> ' + plus, 'Tap <b>Add</b> in the top corner']
       : ['Tap the browser menu <b>⋮</b> in the top corner', 'Choose <b>Add to Home screen</b> or <b>Install app</b>', 'Tap <b>Add</b> or <b>Install</b>'];
+    const app2 = inAppName();
     const el = document.createElement('div');
     el.className = 'a2hs-sheet-wrap';
+    if (app2) {
+      const b = browserName();
+      el.innerHTML = '<div class="a2hs-sheet-bg" data-sheet-close></div><div class="a2hs-sheet" role="dialog" aria-modal="true" aria-label="Open in ' + b + '"><div class="a2hs-grab"></div>' +
+        '<div class="a2hs-sheet-hd"><img src="icon-192.png" alt="" width="52" height="52"><div><h2>Open in ' + b + ' first</h2><span>' + app2 + '\'s browser can\'t add apps to your home screen</span></div></div>' +
+        '<button class="a2hs-open" type="button" data-open-browser>' + COMPASS + 'Open in ' + b + '</button>' +
+        '<button class="a2hs-copy" type="button" data-copy-link>' + COPY + 'Copy link</button>' +
+        '<div class="a2hs-or">Nothing happened? Use one of these:</div>' +
+        '<div class="a2hs-step"><b>1</b><span>Tap <b>•••</b> in the top corner, then <b>Open in ' + (isIOS() ? 'Safari' : 'Chrome</b> or <b>Open in browser') + '</b></span></div>' +
+        '<div class="a2hs-step"><b>2</b><span>Or open ' + b + ' and <b>paste</b> the copied link</span></div>' +
+        '<div class="a2hs-or">Then tap <b>Add to home screen</b> again in ' + b + '.</div>' +
+        '<button class="a2hs-done" type="button" data-sheet-close>Close</button></div>';
+      document.body.appendChild(el);
+      el.querySelector('.a2hs-open').focus();
+      return;
+    }
     el.innerHTML = '<div class="a2hs-sheet-bg" data-sheet-close></div><div class="a2hs-sheet" role="dialog" aria-modal="true" aria-label="Add to home screen"><div class="a2hs-grab"></div>' +
       '<div class="a2hs-sheet-hd"><img src="icon-192.png" alt="" width="52" height="52"><div><h2>' + esc(SITE_NAME) + '</h2><span>Add it to your home screen like an app</span></div></div>' +
       steps.map((t, i) => '<div class="a2hs-step"><b>' + (i + 1) + '</b><span>' + t + '</span></div>').join('') +
@@ -1470,8 +1510,10 @@
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; if (DATA && !app.querySelector('.a2hs')) route(); });
   window.addEventListener('appinstalled', () => { installPrompt = null; const b = app.querySelector('.a2hs'); if (b) b.remove(); });
   document.addEventListener('click', async (e) => {
-    const t = e.target.closest('[data-install], [data-install-later], [data-sheet-close]');
+    const t = e.target.closest('[data-install], [data-install-later], [data-sheet-close], [data-open-browser], [data-copy-link]');
     if (!t) return;
+    if (t.hasAttribute('data-open-browser')) { openInBrowser(); return; }
+    if (t.hasAttribute('data-copy-link')) { copyLink(); return; }
     if (t.hasAttribute('data-sheet-close')) { const w = document.querySelector('.a2hs-sheet-wrap'); if (w) w.remove(); return; }
     if (t.hasAttribute('data-install-later')) { store.set(STORE_A2HS, String(Date.now())); const b = app.querySelector('.a2hs'); if (b) b.remove(); return; }
     if (installPrompt) {
